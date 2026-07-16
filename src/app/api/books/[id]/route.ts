@@ -35,7 +35,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
 
   try {
-    const { title, description, genre, status } = await request.json();
+    const { title, description, genre, status, penName, language, wordCountGoal, pov, povTense, synopsis, customPrompt, seriesId, seriesOrder } = await request.json();
     const book = await db.book.update({
       where: { id },
       data: {
@@ -43,6 +43,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(description !== undefined && { description: description?.trim() || null }),
         ...(genre !== undefined && { genre: genre?.trim() || null }),
         ...(status !== undefined && { status }),
+        ...(penName !== undefined && { penName: penName?.trim() || null }),
+        ...(language !== undefined && { language }),
+        ...(wordCountGoal !== undefined && { wordCountGoal: wordCountGoal ? Number(wordCountGoal) : null }),
+        ...(pov !== undefined && { pov }),
+        ...(povTense !== undefined && { povTense }),
+        ...(synopsis !== undefined && { synopsis: synopsis?.trim() || null }),
+        ...(customPrompt !== undefined && { customPrompt: customPrompt?.trim() || null }),
+        ...(seriesId !== undefined && { seriesId: seriesId || null }),
+        ...(seriesOrder !== undefined && { seriesOrder: seriesOrder != null ? Number(seriesOrder) : null }),
       },
     });
     return NextResponse.json(book);

@@ -34,6 +34,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(body.notes !== undefined && { notes: body.notes?.trim() || null }),
         ...(body.status !== undefined && { status: body.status }),
         ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
+        ...(body.pov !== undefined && { pov: body.pov || null }),
+        ...(body.povTense !== undefined && { povTense: body.povTense || null }),
+        ...(body.pinnedCodexIds !== undefined && { pinnedCodexIds: JSON.stringify(body.pinnedCodexIds) }),
         wordCount: wc,
       },
     });

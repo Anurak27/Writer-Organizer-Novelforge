@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { title, description, genre } = await request.json();
+    const { title, description, genre, penName, language, wordCountGoal, pov, povTense, synopsis, customPrompt, seriesId, seriesOrder } = await request.json();
     if (!title?.trim()) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
@@ -63,7 +63,21 @@ export async function POST(request: NextRequest) {
     const nextOrder = (maxOrder?.sortOrder ?? -1) + 1;
 
     const book = await db.book.create({
-      data: { title: title.trim(), description: description?.trim() || null, genre: genre?.trim() || null, sortOrder: nextOrder },
+      data: {
+        title: title.trim(),
+        description: description?.trim() || null,
+        genre: genre?.trim() || null,
+        penName: penName?.trim() || null,
+        language: language || 'en',
+        wordCountGoal: wordCountGoal ? Number(wordCountGoal) : null,
+        pov: pov || 'third_past',
+        povTense: povTense || 'past',
+        synopsis: synopsis?.trim() || null,
+        customPrompt: customPrompt?.trim() || null,
+        seriesId: seriesId || null,
+        seriesOrder: seriesOrder != null ? Number(seriesOrder) : null,
+        sortOrder: nextOrder,
+      },
     });
 
     return NextResponse.json(book, { status: 201 });

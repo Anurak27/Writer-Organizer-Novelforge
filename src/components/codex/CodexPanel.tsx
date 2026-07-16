@@ -31,6 +31,7 @@ import {
   Pencil,
   Trash2,
   Pin,
+  PinOff,
   X,
 } from 'lucide-react';
 
@@ -67,7 +68,41 @@ export function CodexPanel() {
 
   const token = useAppStore((s) => s.token);
   const activeBookId = useAppStore((s) => s.activeBookId);
+  const activeScene = useAppStore((s) => s.activeScene);
   const setCodexEntries = useAppStore((s) => s.setCodexEntries);
+  const setActiveScene = useAppStore((s) => s.setActiveScene);
+
+  // Scene-level codex pinning
+  const pinnedIds: string[] = activeScene?.pinnedCodexIds
+    ? (typeof activeScene.pinnedCodexIds === 'string'
+        ? JSON.parse(activeScene.pinnedCodexIds)
+        : activeScene.pinnedCodexIds)
+    : [];
+
+  const isPinnedToScene = (entryId: string) => pinnedIds.includes(entryId);
+
+  const handlePinToScene = async (entryId: string) => {
+    if (!activeScene?.id || !token) return;
+    const current = pinnedIds.includes(entryId)
+      ? pinnedIds.filter((id) => id !== entryId)
+      : [...pinnedIds, entryId];
+    try {
+      const res = await fetch(`/api/scenes/${activeScene.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ pinnedCodexIds: current }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveScene(data);
+      }
+    } catch {
+      // silent
+    }
+  };
 
   const fetchEntries = useCallback(async () => {
     if (!token) return;
@@ -288,6 +323,18 @@ export function CodexPanel() {
                       )}
                     </div>
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-6 w-6 ${isPinnedToScene(entry.id) ? 'text-amber-500' : 'text-zinc-500 hover:text-amber-400'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePinToScene(entry.id);
+                        }}
+                        title={isPinnedToScene(entry.id) ? 'Unpin from this scene' : 'Pin to this scene for AI context'}
+                      >
+                        {isPinnedToScene(entry.id) ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

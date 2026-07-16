@@ -8,19 +8,38 @@ datasource db {
 }
 
 model Book {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  genre       String?
-  status      String    @default("draft") // draft, in_progress, completed, on_hiatus
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  title          String
+  description    String?
+  genre          String?
+  status         String    @default("draft") // draft, in_progress, completed, on_hiatus
+  sortOrder      Int       @default(0)
 
-  chapters    Chapter[]
-  codexEntries CodexEntry[]
+  // Novelcrafter-style metadata
+  penName        String?   // author / pen name
+  language       String    @default("en") // en, es, fr, de, etc.
+  wordCountGoal  Int?      // target word count (null = no goal)
+  pov            String    @default("third_past") // first_past, first_present, second_past, second_present, third_past, third_present, third_omniscient
+  povTense       String    @default("past") // past, present
+  synopsis       String?   // book-level synopsis
+  customPrompt   String?   // custom system prompt override for AI
+  coverImagePath String?   // path to uploaded cover image
+
+  // Series support
+  seriesId       String?   // null = standalone, otherwise groups books in a series
+  seriesOrder    Int?      // order within the series
+  seriesParent   Book?     @relation("SeriesBooks", fields: [seriesId], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  chapters       Chapter[]
+  codexEntries   CodexEntry[]
+  snippets       Snippet[]
+  seriesBooks    Book[]    @relation("SeriesBooks")
 
   @@index([sortOrder])
+  @@index([seriesId])
 }
 
 model Chapter {
@@ -40,18 +59,26 @@ model Chapter {
 }
 
 model Scene {
-  id          String    @id @default(cuid())
-  chapterId   String
-  title       String    @default("Untitled Scene")
-  content     String    @default("")
-  notes       String?
-  status      String    @default("outline") // outline, draft, in_progress, needs_revision, complete
-  wordCount   Int       @default(0)
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  chapterId       String
+  title           String    @default("Untitled Scene")
+  content         String    @default("")
+  notes           String?
+  status          String    @default("outline") // outline, draft, in_progress, needs_revision, complete
+  wordCount       Int       @default(0)
+  sortOrder       Int       @default(0)
 
-  chapter     Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  // POV override per scene (null = inherit from book)
+  pov             String?
+  povTense        String?
+
+  // Pinned codex entries for AI context (JSON array of entry IDs)
+  pinnedCodexIds  String    @default("[]")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  chapter         Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   @@unique([chapterId, sortOrder])
   @@index([chapterId, sortOrder])
@@ -60,12 +87,13 @@ model Scene {
 model CodexEntry {
   id          String    @id @default(cuid())
   bookId      String?   // null = global entry
-  type        String    // character, location, lore, item
+  type        String    // character, location, lore, item, subplot, theme
   name        String
   description String    @default("")
   aliases     String    @default("[]") // JSON array string
   tags        String    @default("[]") // JSON array string
   metadata    String    @default("{}") // JSON object string
+  color       String?   // hex color for visual organization
   isPinned    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -74,6 +102,31 @@ model CodexEntry {
 
   @@index([bookId])
   @@index([type])
+}
+
+model Snippet {
+  id          String    @id @default(cuid())
+  bookId      String?   // null = global snippet
+  title       String
+  content     String    @default("")
+  category    String    @default("general") // general, dialogue, description, action, research
+  tags        String    @default("[]") // JSON array string
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  book        Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+
+  @@index([bookId])
+  @@index([category])
+}
+
+model ChatMessage {
+  id          String    @id @default(cuid())
+  bookId      String?   // null = global chat
+  role        String    // user, assistant, system
+  content     String
+  createdAt   DateTime  @default(now())
 }
 
 model AiConfig {

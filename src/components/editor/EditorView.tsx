@@ -5,17 +5,23 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChapterSidebar } from './ChapterSidebar';
 import { SceneEditor } from './SceneEditor';
+import { OutlineView } from '@/components/outline/OutlineView';
 import { CodexPanel } from '@/components/codex/CodexPanel';
 import { AiPanel } from '@/components/ai/AiPanel';
+import { ChatPanel } from '@/components/ai/ChatPanel';
+import { SnippetsPanel } from '@/components/snippets/SnippetsPanel';
 import {
   ArrowLeft,
   BookOpen,
   Database,
   Sparkles,
   StickyNote,
+  MessageSquare,
+  Bookmark,
+  ListTree,
   PanelRightClose,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export function EditorView() {
   const setView = useAppStore((s) => s.setView);
@@ -26,6 +32,8 @@ export function EditorView() {
   const setAiPanelOpen = useAppStore((s) => s.setAiPanelOpen);
   const rightPanelTab = useAppStore((s) => s.rightPanelTab);
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab);
+  const outlineView = useAppStore((s) => s.outlineView);
+  const setOutlineView = useAppStore((s) => s.setOutlineView);
 
   // Calculate total word count for the book
   const totalWords = chapters.reduce(
@@ -41,7 +49,6 @@ export function EditorView() {
         const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
         if (textarea) {
           const newContent = textarea.value + '\n\n' + detail;
-          // Trigger React's onChange by dispatching input event
           const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
             window.HTMLTextAreaElement.prototype,
             'value'
@@ -53,9 +60,43 @@ export function EditorView() {
       }
     };
 
+    const handleSnippetInsert = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && activeScene) {
+        const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
+        if (textarea) {
+          const pos = textarea.selectionStart;
+          const before = textarea.value.slice(0, pos);
+          const after = textarea.value.slice(textarea.selectionEnd);
+          const newContent = before + detail + after;
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype,
+            'value'
+          )?.set;
+          nativeInputValueSetter?.call(textarea, newContent);
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          const newPos = pos + detail.length;
+          setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(newPos, newPos);
+          }, 0);
+        }
+      }
+    };
+
     window.addEventListener('ai-insert-text', handleAiInsert);
-    return () => window.removeEventListener('ai-insert-text', handleAiInsert);
+    window.addEventListener('snippet-insert-text', handleSnippetInsert);
+    return () => {
+      window.removeEventListener('ai-insert-text', handleAiInsert);
+      window.removeEventListener('snippet-insert-text', handleSnippetInsert);
+    };
   }, [activeScene]);
+
+  // If outline view is active, show it full-page
+  if (outlineView) {
+    return <OutlineView />;
+  }
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
@@ -89,6 +130,16 @@ export function EditorView() {
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Outline toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 ${outlineView ? 'text-amber-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+            onClick={() => setOutlineView(!outlineView)}
+            title="Toggle Outline View"
+          >
+            <ListTree className="w-4 h-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -120,30 +171,44 @@ export function EditorView() {
         <div className="flex-1 flex overflow-hidden min-w-0">
           <SceneEditor />
 
-          {/* Right Panel (Codex / AI) */}
+          {/* Right Panel (Codex / AI / Chat / Snippets / Notes) */}
           {aiPanelOpen && (
             <div className="w-72 lg:w-80 border-l border-zinc-800 bg-zinc-950 flex flex-col shrink-0">
-              <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as 'codex' | 'ai' | 'notes')} className="flex flex-col h-full">
-                <TabsList className="bg-transparent border-b border-zinc-800/50 rounded-none h-auto p-0 shrink-0">
+              <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as 'codex' | 'ai' | 'notes' | 'chat' | 'snippets')} className="flex flex-col h-full">
+                <TabsList className="bg-transparent border-b border-zinc-800/50 rounded-none h-auto p-0 shrink-0 overflow-x-auto">
                   <TabsTrigger
                     value="codex"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-xs"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
-                    <Database className="w-3.5 h-3.5 mr-1.5" />
+                    <Database className="w-3.5 h-3.5 mr-1" />
                     Codex
                   </TabsTrigger>
                   <TabsTrigger
                     value="ai"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-xs"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                    AI Buddy
+                    <Sparkles className="w-3.5 h-3.5 mr-1" />
+                    AI
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="chat"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                    Chat
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="snippets"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                  >
+                    <Bookmark className="w-3.5 h-3.5 mr-1" />
+                    Clips
                   </TabsTrigger>
                   <TabsTrigger
                     value="notes"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-xs"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
-                    <StickyNote className="w-3.5 h-3.5 mr-1.5" />
+                    <StickyNote className="w-3.5 h-3.5 mr-1" />
                     Notes
                   </TabsTrigger>
                 </TabsList>
@@ -152,6 +217,12 @@ export function EditorView() {
                 </TabsContent>
                 <TabsContent value="ai" className="flex-1 mt-0 overflow-hidden">
                   <AiPanel />
+                </TabsContent>
+                <TabsContent value="chat" className="flex-1 mt-0 overflow-hidden">
+                  <ChatPanel />
+                </TabsContent>
+                <TabsContent value="snippets" className="flex-1 mt-0 overflow-hidden">
+                  <SnippetsPanel />
                 </TabsContent>
                 <TabsContent value="notes" className="flex-1 mt-0 overflow-hidden">
                   <SceneNotes />
@@ -171,12 +242,6 @@ function SceneNotes() {
   const setActiveScene = useAppStore((s) => s.setActiveScene);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (activeScene) {
-      setNotes(activeScene.notes || '');
-    }
-  }, [activeScene?.id]);
 
   const saveNotes = async (value: string) => {
     if (!activeScene?.id || !token) return;
@@ -201,12 +266,12 @@ function SceneNotes() {
     }
   };
 
-  let timeout: NodeJS.Timeout;
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setNotes(val);
-    clearTimeout(timeout);
-    timeout = setTimeout(() => saveNotes(val), 2000);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => saveNotes(val), 2000);
   };
 
   if (!activeScene) {
@@ -226,7 +291,7 @@ function SceneNotes() {
       <textarea
         value={notes}
         onChange={handleChange}
-        placeholder="Jot down ideas, reminders, or outlines for this scene..."
+        placeholder="Jot down ideas, reminders, or outlines for this scene. Notes are excluded from AI context."
         className="flex-1 bg-transparent text-zinc-300 text-sm p-4 resize-none focus:outline-none placeholder:text-zinc-700"
       />
     </div>

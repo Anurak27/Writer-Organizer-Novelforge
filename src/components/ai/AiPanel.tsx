@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Copy, Replace, X, Wand2, Expand, Shrink, RefreshCw, Loader2 } from 'lucide-react';
+import { Sparkles, Copy, Replace, X, Wand2, Expand, Shrink, RefreshCw, Loader2, Play, FileText } from 'lucide-react';
 import { extractMentions } from '@/components/editor/MentionDropdown';
 
 export function AiPanel() {
@@ -39,6 +39,7 @@ export function AiPanel() {
           sceneContent: activeScene?.content || '',
           mentionedNames,
           bookId: activeBookId,
+          sceneId: activeScene?.id,
         };
 
         if (action === 'generate_scene') {
@@ -70,29 +71,6 @@ export function AiPanel() {
     },
     [token, activeScene, activeBookId, beats, setAiLoading, setAiGeneratedText]
   );
-
-  const handleInlineAction = (action: string) => {
-    const textarea = document.querySelector<HTMLTextAreaElement>(
-      '.scene-editor-textarea'
-    );
-    if (!textarea) {
-      // Fallback: use active scene content
-      generate(action);
-      return;
-    }
-
-    const selected = textarea.value.substring(
-      textarea.selectionStart,
-      textarea.selectionEnd
-    );
-
-    if (!selected.trim()) {
-      setAiError('Select some text in the editor first.');
-      return;
-    }
-
-    generate(action, selected);
-  };
 
   const copyToClipboard = () => {
     if (aiGeneratedText) {
@@ -128,12 +106,12 @@ export function AiPanel() {
             <p className="text-xs text-zinc-600 mb-3">
               Select text in the editor, then choose an action:
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 h-auto py-2"
-                onClick={() => handleInlineAction('expand')}
+                onClick={() => generate('expand')}
                 disabled={aiLoading}
               >
                 <Expand className="w-3.5 h-3.5 mr-1" />
@@ -143,7 +121,7 @@ export function AiPanel() {
                 variant="outline"
                 size="sm"
                 className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 h-auto py-2"
-                onClick={() => handleInlineAction('rewrite')}
+                onClick={() => generate('rewrite')}
                 disabled={aiLoading}
               >
                 <RefreshCw className="w-3.5 h-3.5 mr-1" />
@@ -153,13 +131,33 @@ export function AiPanel() {
                 variant="outline"
                 size="sm"
                 className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 h-auto py-2"
-                onClick={() => handleInlineAction('shorten')}
+                onClick={() => generate('shorten')}
                 disabled={aiLoading}
               >
                 <Shrink className="w-3.5 h-3.5 mr-1" />
                 Shorten
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-amber-800/50 text-amber-400 hover:bg-amber-900/30 hover:text-amber-300 h-auto py-2 border-dashed"
+                onClick={() => generate('continue')}
+                disabled={aiLoading}
+              >
+                <Play className="w-3.5 h-3.5 mr-1" />
+                Continue
+              </Button>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 text-xs mt-1"
+              onClick={() => generate('summarize')}
+              disabled={aiLoading || !activeScene?.content?.trim()}
+            >
+              <FileText className="w-3.5 h-3.5 mr-1.5" />
+              Summarize Scene → Notes
+            </Button>
           </div>
 
           <div className="border-t border-zinc-800/50" />
