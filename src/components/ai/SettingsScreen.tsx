@@ -13,16 +13,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft } from 'lucide-react';
+import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft, Star, Zap } from 'lucide-react';
+
+const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: string; needsBaseUrl: boolean }> = {
+  openrouter:  { label: 'OpenRouter',      defaultModel: 'openai/gpt-4o-mini',                  hint: 'openrouter.ai/keys',                   needsBaseUrl: false },
+  groq:        { label: 'Groq',            defaultModel: 'llama-3.3-70b-versatile',               hint: 'console.groq.com/keys',                needsBaseUrl: false },
+  cerebras:    { label: 'Cerebras',        defaultModel: 'llama-4-scout-17b-16e-instruct',      hint: 'cloud.cerebras.ai',                    needsBaseUrl: false },
+  nararouter:  { label: 'NaraRouter',      defaultModel: 'openai/gpt-4o-mini',                  hint: 'router.bynara.id',                     needsBaseUrl: true },
+  google:      { label: 'Google AI Studio',defaultModel: 'gemini-2.0-flash',                     hint: 'aistudio.google.com/apikey',            needsBaseUrl: false },
+  openai:      { label: 'OpenAI',          defaultModel: 'gpt-4o-mini',                          hint: 'platform.openai.com',                   needsBaseUrl: false },
+  anthropic:   { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-4-20250514',         hint: 'console.anthropic.com',                 needsBaseUrl: false },
+};
 
 export function SettingsScreen() {
   const [configs, setConfigs] = useState<AiConfig[]>([]);
-  const [provider, setProvider] = useState('openai');
+  const [provider, setProvider] = useState('openrouter');
   const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
   const [modelName, setModelName] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [activating, setActivating] = useState<string | null>(null);
 
   const token = useAppStore((s) => s.token);
   const setToken = useAppStore((s) => s.setToken);
@@ -37,11 +49,6 @@ export function SettingsScreen() {
       if (res.ok) {
         const data = await res.json();
         setConfigs(data);
-        const active = data.find((c: AiConfig) => c.isActive);
-        if (active) {
-          setProvider(active.provider);
-          setModelName(active.modelName || '');
-        }
       }
     } catch {
       // silent
@@ -52,26 +59,45 @@ export function SettingsScreen() {
     fetchConfigs();
   }, [fetchConfigs]);
 
+  // When provider changes, pre-fill default values
+  const handleProviderChange = (p: string) => {
+    setProvider(p);
+    setModelName('');
+    setBaseUrl('');
+    setApiKey('');
+    const existing = configs.find((c) => c.provider === p);
+    if (existing) {
+      setModelName(existing.modelName || '');
+      setBaseUrl(existing.baseUrl || '');
+    }
+  };
+
   const handleSave = async () => {
     if (!apiKey.trim() || !token) return;
     setSaving(true);
     setSuccess('');
     setError('');
     try {
+      const provDef = PROVIDERS[provider];
+      const body: Record<string, unknown> = {
+        provider,
+        apiKey: apiKey.trim(),
+        modelName: modelName.trim() || null,
+      };
+      // Only send baseUrl if the provider needs it or if user provided one
+      if (provDef?.needsBaseUrl || baseUrl.trim()) {
+        body.baseUrl = baseUrl.trim() || null;
+      }
       const res = await fetch('/api/ai/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          provider,
-          apiKey: apiKey.trim(),
-          modelName: modelName.trim() || null,
-        }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
-        setSuccess(`${provider} API key saved successfully.`);
+        setSuccess(`${provDef?.label || provider} API key saved successfully.`);
         setApiKey('');
         fetchConfigs();
       } else {
@@ -86,7 +112,8 @@ export function SettingsScreen() {
   };
 
   const handleDelete = async (prov: string) => {
-    if (!confirm(`Remove ${prov} API key?`)) return;
+    const label = PROVIDERS[prov]?.label || prov;
+    if (!confirm(`Remove ${label} API key?`)) return;
     try {
       await fetch('/api/ai/config', {
         method: 'DELETE',
@@ -102,21 +129,53 @@ export function SettingsScreen() {
     }
   };
 
+  const handleSetActive = async (prov: string) => {
+    if (activating) return;
+    setActivating(prov);
+    try {
+      // Deactivate all, then activate the selected one
+      const target = configs.find((c) => c.provider === prov);
+      if (!target) return;
+      await fetch('/api/ai/config', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          provider: prov,
+          apiKey: '__keep_existing__',
+          isActive: true,
+        }),
+      });
+      // Deactivate others
+      for (const c of configs) {
+        if (c.provider !== prov && c.isActive) {
+          await fetch('/api/ai/config', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              provider: c.provider,
+              apiKey: '__keep_existing__',
+              isActive: false,
+            }),
+          });
+        }
+      }
+      fetchConfigs();
+    } catch {
+      // silent
+    } finally {
+      setActivating(null);
+    }
+  };
+
   const handleLogout = () => {
     setToken(null);
     setView('auth');
-  };
-
-  const providerLabels: Record<string, string> = {
-    openai: 'OpenAI',
-    anthropic: 'Anthropic (Claude)',
-    openrouter: 'OpenRouter',
-  };
-
-  const defaultModels: Record<string, string> = {
-    openai: 'gpt-4o-mini',
-    anthropic: 'claude-sonnet-4-20250514',
-    openrouter: 'openai/gpt-4o-mini',
   };
 
   return (
@@ -151,47 +210,64 @@ export function SettingsScreen() {
         {/* AI Provider Configuration */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <Key className="w-5 h-5 text-amber-500" />
+            <Zap className="w-5 h-5 text-amber-500" />
             <h2 className="text-lg font-semibold text-zinc-100">AI Provider Configuration</h2>
           </div>
           <p className="text-sm text-zinc-500 mb-6">
-            Add your own API key to enable AI writing features. Your key is stored locally in the database and sent directly to the provider — never shared with any third party.
+            Add your own API keys to enable AI writing features. Keys are stored locally and sent directly to the provider — never shared with any third party. Click the star to set your active provider.
           </p>
 
           {/* Saved Configs */}
           {configs.length > 0 && (
             <div className="space-y-2 mb-6">
-              {configs.map((config) => (
-                <div
-                  key={config.id}
-                  className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    {config.isActive ? (
-                      <CheckCircle className="w-4 h-4 text-emerald-400" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full border-2 border-zinc-700" />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium text-zinc-200">
-                        {providerLabels[config.provider] || config.provider}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        {config.modelName || 'Default model'}
-                        {config.isActive && ' (Active)'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-zinc-500 hover:text-red-400"
-                    onClick={() => handleDelete(config.provider)}
+              {configs.map((config) => {
+                const provDef = PROVIDERS[config.provider];
+                return (
+                  <div
+                    key={config.id}
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      config.isActive
+                        ? 'bg-amber-500/5 border-amber-500/20'
+                        : 'bg-zinc-900 border-zinc-800'
+                    }`}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleSetActive(config.provider)}
+                        className="text-zinc-600 hover:text-amber-400 transition-colors"
+                        title={config.isActive ? 'Active provider (click to change)' : 'Click to set as active'}
+                      >
+                        {config.isActive ? (
+                          <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                        ) : (
+                          <Star className="w-4 h-4" />
+                        )}
+                      </button>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-200">
+                          {provDef?.label || config.provider}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {config.modelName || provDef?.defaultModel || 'Default model'}
+                          {config.isActive && (
+                            <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 border-emerald-500/30 text-emerald-400">
+                              Active
+                            </Badge>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-zinc-500 hover:text-red-400"
+                      onClick={() => handleDelete(config.provider)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -199,14 +275,14 @@ export function SettingsScreen() {
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 space-y-4">
             <div>
               <label className="text-sm font-medium text-zinc-300 mb-1.5 block">Provider</label>
-              <Select value={provider} onValueChange={setProvider}>
+              <Select value={provider} onValueChange={handleProviderChange}>
                 <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700">
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  {Object.entries(PROVIDERS).map(([key, def]) => (
+                    <SelectItem key={key} value={key}>{def.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -215,28 +291,44 @@ export function SettingsScreen() {
               <label className="text-sm font-medium text-zinc-300 mb-1.5 block">API Key</label>
               <Input
                 type="password"
-                placeholder={configs.find((c) => c.provider === provider) ? 'Enter new key to replace...' : 'sk-... or key-...'}
+                placeholder={
+                  configs.find((c) => c.provider === provider)
+                    ? 'Enter new key to replace...'
+                    : 'Paste your API key...'
+                }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono"
+                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono text-sm"
               />
               <p className="text-xs text-zinc-600 mt-1">
-                {provider === 'openai' && 'Get your key from platform.openai.com'}
-                {provider === 'anthropic' && 'Get your key from console.anthropic.com'}
-                {provider === 'openrouter' && 'Get your key from openrouter.ai/keys'}
+                Get your key from {PROVIDERS[provider]?.hint}
               </p>
             </div>
+
+            {PROVIDERS[provider]?.needsBaseUrl && (
+              <div>
+                <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
+                  Base URL
+                </label>
+                <Input
+                  placeholder={PROVIDERS[provider]?.defaultModel ? `https://...` : 'https://...'}
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono text-sm"
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
                 Model Name{' '}
-                <span className="text-zinc-600 font-normal">(optional)</span>
+                <span className="text-zinc-600 font-normal">(optional — overrides default)</span>
               </label>
               <Input
-                placeholder={defaultModels[provider] || 'Default model'}
+                placeholder={PROVIDERS[provider]?.defaultModel || 'Default model'}
                 value={modelName}
                 onChange={(e) => setModelName(e.target.value)}
-                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono"
+                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono text-sm"
               />
             </div>
 
@@ -261,7 +353,7 @@ export function SettingsScreen() {
               {saving ? 'Saving...' : (
                 <>
                   <Save className="w-4 h-4 mr-2" />
-                  Save {providerLabels[provider]} Key
+                  Save {PROVIDERS[provider]?.label || provider} Key
                 </>
               )}
             </Button>
@@ -270,7 +362,6 @@ export function SettingsScreen() {
 
         <Separator className="bg-zinc-800" />
 
-        {/* About */}
         <section>
           <div className="flex items-center gap-2 mb-2">
             <BookOpen className="w-5 h-5 text-zinc-500" />

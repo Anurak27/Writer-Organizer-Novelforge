@@ -54,7 +54,14 @@ export async function POST(request: NextRequest) {
       userMessage = text || '';
     }
 
-    const result = await callAI(config.provider, config.apiKey, config.modelName, systemPrompt, userMessage);
+    const result = await callAI(
+      config.provider,
+      config.apiKey,
+      config.baseUrl,
+      config.modelName,
+      systemPrompt,
+      userMessage
+    );
 
     return NextResponse.json({ result });
   } catch (error: unknown) {
@@ -79,30 +86,63 @@ function buildSystemPrompt(action: string, sceneContent: string, codexContext: s
   return prompt;
 }
 
-async function callAI(provider: string, apiKey: string, modelName: string | null, systemPrompt: string, userMessage: string): Promise<string> {
-  if (provider === 'openai') {
-    const model = modelName || 'gpt-4o-mini';
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+// --- Provider registry ---
+// Each provider defines: default model, base URL, and whether it uses the
+// OpenAI-compatible chat/completions format, the Anthropic format, or the Gemini format.
+
+interface ProviderDef {
+  defaultModel: string;
+  baseUrl: string;
+  format: 'openai' | 'anthropic' | 'google';
+}
+
+const PROVIDERS: Record<string, ProviderDef> = {
+  openai:      { defaultModel: 'gpt-4o-mini',               baseUrl: 'https://api.openai.com/v1/chat/completions', format: 'openai' },
+  anthropic:   { defaultModel: 'claude-sonnet-4-20250514',   baseUrl: 'https://api.anthropic.com/v1/messages', format: 'anthropic' },
+  openrouter:  { defaultModel: 'openai/gpt-4o-mini',        baseUrl: 'https://openrouter.ai/api/v1/chat/completions', format: 'openai' },
+  groq:        { defaultModel: 'llama-3.3-70b-versatile',   baseUrl: 'https://api.groq.com/openai/v1/chat/completions', format: 'openai' },
+  cerebras:    { defaultModel: 'llama-4-scout-17b-16e-instruct', baseUrl: 'https://api.cerebras.ai/v1/chat/completions', format: 'openai' },
+  nararouter:  { defaultModel: 'openai/gpt-4o-mini',       baseUrl: 'https://router.bynara.id/v1/chat/completions', format: 'openai' },
+  google:      { defaultModel: 'gemini-2.0-flash',          baseUrl: 'https://generativelanguage.googleapis.com/v1beta', format: 'google' },
+};
+
+async function callAI(
+  provider: string,
+  apiKey: string,
+  customBaseUrl: string | null,
+  modelName: string | null,
+  systemPrompt: string,
+  userMessage: string,
+): Promise<string> {
+  const def = PROVIDERS[provider];
+  if (!def) throw new Error(`Unknown AI provider: ${provider}. Supported: ${Object.keys(PROVIDERS).join(', ')}`);
+
+  const model = modelName || def.defaultModel;
+
+  // --- Google Gemini (native format) ---
+  if (def.format === 'google') {
+    const url = `${customBaseUrl || def.baseUrl}/models/${model}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        max_tokens: 2000,
-        temperature: 0.8,
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userMessage }] }],
+        generationConfig: {
+          maxOutputTokens: 2000,
+          temperature: 0.8,
+        },
       }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.choices[0].message.content;
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
-  if (provider === 'anthropic') {
-    const model = modelName || 'claude-sonnet-4-20250514';
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+  // --- Anthropic (native format) ---
+  if (def.format === 'anthropic') {
+    const url = customBaseUrl || def.baseUrl;
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -122,28 +162,28 @@ async function callAI(provider: string, apiKey: string, modelName: string | null
     return data.content[0].text;
   }
 
-  if (provider === 'openrouter') {
-    const model = modelName || 'openai/gpt-4o-mini';
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        max_tokens: 2000,
-        temperature: 0.8,
-      }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.choices[0].message.content;
+  // --- OpenAI-compatible (covers openai, openrouter, groq, cerebras, nararouter, etc.) ---
+  const url = customBaseUrl || def.baseUrl;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 2000,
+      temperature: 0.8,
+    }),
+  });
+  const data = await res.json();
+  if (data.error) {
+    const errMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    throw new Error(errMsg);
   }
-
-  throw new Error(`Unknown AI provider: ${provider}`);
+  return data.choices[0].message.content;
 }

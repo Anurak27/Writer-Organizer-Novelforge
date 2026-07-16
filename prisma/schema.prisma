@@ -78,8 +78,9 @@ model CodexEntry {
 
 model AiConfig {
   id              String    @id @default(cuid())
-  provider        String    // openai, anthropic, openrouter
+  provider        String    // openai, anthropic, openrouter, groq, cerebras, nararouter, google
   apiKey          String    // stored as-is (encrypted in Supabase prod)
+  baseUrl         String?   // custom base URL for OpenAI-compatible providers
   modelName       String?
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())

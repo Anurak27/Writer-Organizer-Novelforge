@@ -26,10 +26,32 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const { provider, apiKey, modelName, isActive } = await request.json();
+    const { provider, apiKey, baseUrl, modelName, isActive } = await request.json();
 
-    if (!provider || !apiKey?.trim()) {
-      return NextResponse.json({ error: 'Provider and API key are required' }, { status: 400 });
+    if (!provider) {
+      return NextResponse.json({ error: 'Provider is required' }, { status: 400 });
+    }
+
+    // "Activate only" mode: toggle active status without changing the key
+    const activateOnly = !apiKey?.trim() || apiKey === '__keep_existing__';
+
+    if (activateOnly && isActive !== undefined) {
+      // Deactivate ALL configs first, then activate the requested one
+      await db.aiConfig.updateMany({ where: {}, data: { isActive: false } });
+      const target = await db.aiConfig.findFirst({ where: { provider } });
+      if (target) {
+        await db.aiConfig.update({ where: { id: target.id }, data: { isActive: true } });
+      }
+      const configs = await db.aiConfig.findMany({ orderBy: { createdAt: 'desc' } });
+      const masked = configs.map((c) => ({
+        ...c,
+        apiKey: c.apiKey ? `${c.apiKey.slice(0, 8)}...${c.apiKey.slice(-4)}` : '',
+      }));
+      return NextResponse.json(masked);
+    }
+
+    if (!apiKey?.trim()) {
+      return NextResponse.json({ error: 'API key is required' }, { status: 400 });
     }
 
     // Deactivate all configs for this provider first
@@ -44,6 +66,7 @@ export async function PUT(request: NextRequest) {
         where: { id: existing.id },
         data: {
           apiKey: apiKey.trim(),
+          baseUrl: baseUrl?.trim() || null,
           modelName: modelName?.trim() || null,
           isActive: isActive ?? true,
         },
@@ -53,6 +76,7 @@ export async function PUT(request: NextRequest) {
         data: {
           provider,
           apiKey: apiKey.trim(),
+          baseUrl: baseUrl?.trim() || null,
           modelName: modelName?.trim() || null,
           isActive: true,
         },
