@@ -121,10 +121,14 @@ async function callAI(
 
   // --- Google Gemini (native format) ---
   if (def.format === 'google') {
-    const url = `${customBaseUrl || def.baseUrl}/models/${model}:generateContent?key=${apiKey}`;
+    const base = customBaseUrl || def.baseUrl;
+    const url = `${base}/models/${model}:generateContent`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ parts: [{ text: userMessage }] }],
