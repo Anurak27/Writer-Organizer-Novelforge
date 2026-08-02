@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Save, Clock, Sparkles, PanelRight, BookOpen, ListTree, MessageSquare, Target } from 'lucide-react';
+import { Save, Clock, Sparkles, PanelRight, BookOpen, ListTree, MessageSquare, Target, ImagePlus, Download, Eye } from 'lucide-react';
 import { MentionDropdown, extractMentions } from './MentionDropdown';
 import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
 
@@ -23,6 +23,7 @@ export function SceneEditor() {
   const setAiLoading = useAppStore((s) => s.setAiLoading);
   const aiLoading = useAppStore((s) => s.aiLoading);
   const setOutlineView = useAppStore((s) => s.setOutlineView);
+  const setPreviewOpen = useAppStore((s) => s.setPreviewOpen);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -209,7 +210,7 @@ export function SceneEditor() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveContent(val);
-    }, 3000);
+    }, 30000);
   };
 
   const handleMentionSelect = (entryName: string) => {
@@ -280,6 +281,69 @@ export function SceneEditor() {
     ch.scenes.some((sc) => sc.id === activeSceneId)
   );
 
+  // Inline image insertion
+  const handleInsertImage = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file || !token || !activeBookId) return;
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('purpose', 'inline');
+        fd.append('bookId', activeBookId);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const imgTag = `\n![${file.name}](${data.url})\n`;
+          const textarea = textareaRef.current;
+          if (textarea) {
+            const pos = textarea.selectionStart;
+            const before = content.slice(0, pos);
+            const after = content.slice(pos);
+            const newContent = before + imgTag + after;
+            setContent(newContent);
+            setTimeout(() => {
+              textarea.focus();
+              const newPos = pos + imgTag.length;
+              textarea.setSelectionRange(newPos, newPos);
+            }, 0);
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = setTimeout(() => saveContent(newContent), 1000);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    input.click();
+  };
+
+  // Export handler
+  const handleExport = async (format: string) => {
+    if (!activeBookId || !token) return;
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bookId: activeBookId, format, sections: 'manuscript' }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `manuscript.${format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch { /* ignore */ }
+  };
+
   const formatWordCount = (w: number) => {
     if (w >= 1000) return `${(w / 1000).toFixed(1)}k`;
     return String(w);
@@ -347,6 +411,16 @@ export function SceneEditor() {
               AI thinking...
             </Badge>
           )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-zinc-500 hover:text-zinc-300"
+            onClick={handleInsertImage}
+            title="Insert Image"
+          >
+            <ImagePlus className="w-4 h-4" />
+          </Button>
 
           <Button
             variant="ghost"
@@ -423,8 +497,9 @@ export function SceneEditor() {
           <span className="hidden sm:inline">Type / for commands</span>
         </div>
         <div className="flex items-center gap-4">
-          <span>{wordCount} words</span>
-          <span>~{Math.max(1, Math.ceil(wordCount / 250))} page{Math.ceil(wordCount / 250) !== 1 ? 's' : ''}</span>
+          <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-zinc-300 h-6 text-xs" onClick={() => handleExport('pdf')}><Download className="w-3 h-3 mr-1" />PDF</Button>
+          <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-zinc-300 h-6 text-xs" onClick={() => handleExport('docx')}><Download className="w-3 h-3 mr-1" />DOCX</Button>
+          <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-zinc-300 h-6 text-xs" onClick={() => setPreviewOpen(true)}><Eye className="w-3 h-3 mr-1" />Preview</Button>
         </div>
       </div>
     </div>

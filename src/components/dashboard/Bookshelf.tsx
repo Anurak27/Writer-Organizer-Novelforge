@@ -30,6 +30,11 @@ import {
   MoreVertical,
   Pencil,
   Bookmark,
+  Upload,
+  Download,
+  Eye,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -76,7 +81,26 @@ const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
 interface BookMeta {
   wordCountGoal: number | null;
   seriesId: string | null;
+  coverImagePath: string | null;
 }
+
+const PROSE_STYLES = [
+  { value: 'literary', label: 'Literary' },
+  { value: 'minimalist', label: 'Minimalist' },
+  { value: 'flowery', label: 'Flowery / Descriptive' },
+  { value: 'pulp', label: 'Pulp / Fast-paced' },
+  { value: 'formal', label: 'Formal / Academic' },
+  { value: 'conversational', label: 'Conversational' },
+];
+
+const TONE_OPTIONS = [
+  { value: 'dark', label: 'Dark / Grim' },
+  { value: 'humorous', label: 'Humorous / Light' },
+  { value: 'romantic', label: 'Romantic' },
+  { value: 'suspenseful', label: 'Suspenseful' },
+  { value: 'melancholic', label: 'Melancholic' },
+  { value: 'whimsical', label: 'Whimsical' },
+];
 
 function formatWordCount(words: number): string {
   if (words >= 1000) return `${(words / 1000).toFixed(1)}k`;
@@ -112,6 +136,33 @@ export function Bookshelf() {
   const [editShowAdvanced, setEditShowAdvanced] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+
+  // Style & Prose (create)
+  const [newProseStyle, setNewProseStyle] = useState('');
+  const [newTone, setNewTone] = useState('');
+  const [newCustomPrompt, setNewCustomPrompt] = useState('');
+
+  // Style & Prose (edit)
+  const [editProseStyle, setEditProseStyle] = useState('');
+  const [editTone, setEditTone] = useState('');
+  const [editCustomPrompt, setEditCustomPrompt] = useState('');
+
+  // Cover upload
+  const [newCoverPath, setNewCoverPath] = useState('');
+  const [editCoverPath, setEditCoverPath] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  // Import
+  const [showImport, setShowImport] = useState(false);
+  const [importBookId, setImportBookId] = useState<string | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
+  // Export
+  const [showExport, setShowExport] = useState(false);
+  const [exportBookId, setExportBookId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Cached book metadata for cards (wordCountGoal, seriesId)
   const [bookMeta, setBookMeta] = useState<Record<string, BookMeta>>({});
@@ -205,6 +256,7 @@ export function Bookshelf() {
           [id]: {
             wordCountGoal: detail.wordCountGoal,
             seriesId: detail.seriesId,
+            coverImagePath: detail.coverImagePath,
           },
         }));
         return detail;
@@ -231,6 +283,10 @@ export function Bookshelf() {
       setEditPov(detail.pov || 'third_past');
       setEditWordCountGoal(detail.wordCountGoal ? String(detail.wordCountGoal) : '');
       setEditLanguage(detail.language || 'en');
+      setEditProseStyle(detail.proseStyle || '');
+      setEditTone(detail.tone || '');
+      setEditCustomPrompt(detail.customPrompt || '');
+      setEditCoverPath(detail.coverImagePath || '');
     }
     setEditLoading(false);
   };
@@ -253,6 +309,10 @@ export function Bookshelf() {
           pov: editPov,
           wordCountGoal: editWordCountGoal ? parseInt(editWordCountGoal, 10) : null,
           language: editLanguage,
+          proseStyle: editProseStyle || null,
+          tone: editTone || null,
+          customPrompt: editCustomPrompt.trim() || null,
+          coverImagePath: editCoverPath || null,
         }),
       });
       if (res.ok) {
@@ -280,6 +340,86 @@ export function Bookshelf() {
     setView('editor');
   };
 
+  // Upload cover image
+  const uploadCover = async (file: File, mode: 'create' | 'edit') => {
+    setUploadingCover(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'cover');
+      const bookId = mode === 'edit' ? editBookId : null;
+      if (bookId) formData.append('bookId', bookId);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (mode === 'create') setNewCoverPath(data.url);
+        else setEditCoverPath(data.url);
+      }
+    } catch { /* ignore */ }
+    setUploadingCover(false);
+  };
+
+  // Handle import
+  const handleImport = async () => {
+    if (!importBookId || !importFile) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('bookId', importBookId);
+      formData.append('mode', 'ai');
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setImportResult(data.message);
+        fetchBooks();
+      } else {
+        setImportResult('Error: ' + (data.error || 'Import failed'));
+      }
+    } catch (err) {
+      setImportResult('Error: Import failed');
+    }
+    setImporting(false);
+  };
+
+  // Handle export
+  const handleExport = async (format: string, sections: string) => {
+    if (!exportBookId) return;
+    setExporting(true);
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${useAppStore.getState().token}`,
+        },
+        body: JSON.stringify({ bookId: exportBookId, format, sections }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const book = books.find(b => b.id === exportBookId);
+        const ext = format;
+        a.download = `${(book?.title || 'export').replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setShowExport(false);
+      }
+    } catch { /* ignore */ }
+    setExporting(false);
+  };
+
   const totalWords = books.reduce((sum, b) => sum + b.totalWords, 0);
 
   const inputCls =
@@ -294,6 +434,24 @@ export function Bookshelf() {
             <h1 className="text-xl font-bold text-zinc-100 tracking-tight">NovelForge</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setImportBookId(null); setImportFile(null); setImportResult(null); setShowImport(true); }}
+              className="text-zinc-400 hover:text-zinc-200"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Import</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setExportBookId(null); setShowExport(true); }}
+              className="text-zinc-400 hover:text-zinc-200"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Export</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -456,6 +614,7 @@ export function Bookshelf() {
               const meta = bookMeta[book.id];
               const goal = meta?.wordCountGoal;
               const hasSeries = meta?.seriesId != null;
+              const coverUrl = meta?.coverImagePath;
               const progress =
                 goal && goal > 0
                   ? Math.min(100, (book.totalWords / goal) * 100)
@@ -465,13 +624,20 @@ export function Bookshelf() {
               return (
                 <div
                   key={book.id}
-                  className={`group relative border rounded-xl p-5 cursor-pointer transition-all duration-200 ${
+                  className={`group relative border rounded-xl cursor-pointer transition-all duration-200 overflow-hidden ${
                     goalMet
                       ? 'bg-emerald-950/30 border-emerald-900/40 hover:border-emerald-800/60'
                       : 'bg-zinc-900/80 border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900'
                   }`}
                   onClick={() => openBook(book.id)}
                 >
+                  {/* Cover Image */}
+                  {coverUrl ? (
+                    <div className="h-32 w-full overflow-hidden bg-zinc-800">
+                      <img src={coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                    </div>
+                  ) : null}
+                  <div className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -503,10 +669,34 @@ export function Bookshelf() {
                       <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
                         <DropdownMenuItem
                           className="text-zinc-300 focus:text-zinc-100"
-                          onClick={(e) => openEditDialog(book.id, e)}
+                          onClick={(e) => { e.stopPropagation(); openEditDialog(book.id, e); }}
                         >
                           <Pencil className="w-4 h-4 mr-2" />
                           Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-zinc-300 focus:text-zinc-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setImportBookId(book.id);
+                            setImportFile(null);
+                            setImportResult(null);
+                            setShowImport(true);
+                          }}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Import Document
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-zinc-300 focus:text-zinc-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExportBookId(book.id);
+                            setShowExport(true);
+                          }}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export Book
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-red-400 focus:text-red-300"
@@ -562,6 +752,7 @@ export function Bookshelf() {
                     <Badge variant="outline" className={STATUS_COLORS[book.status] || ''}>
                       {STATUS_LABELS[book.status] || book.status}
                     </Badge>
+                  </div>
                   </div>
                 </div>
               );
@@ -660,6 +851,86 @@ export function Bookshelf() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Cover Upload */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-zinc-400">Cover Image</label>
+                    <div className="flex items-center gap-3">
+                      {editCoverPath ? (
+                        <div className="relative w-16 h-22 rounded overflow-hidden border border-zinc-700 shrink-0">
+                          <img src={editCoverPath} alt="Cover" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => setEditCoverPath('')}
+                            className="absolute top-0.5 right-0.5 w-5 h-5 bg-zinc-900/80 rounded-full flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3 text-zinc-400" />
+                          </button>
+                        </div>
+                      ) : null}
+                      <label className="flex-1 cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadCover(f, 'edit');
+                          }}
+                        />
+                        <div className={`${inputCls} flex items-center justify-center h-10 border border-dashed border-zinc-700 rounded-md hover:border-zinc-500 transition-colors`}>
+                          {uploadingCover ? (
+                            <span className="text-xs text-zinc-500">Uploading...</span>
+                          ) : (
+                            <>
+                              <ImagePlus className="w-4 h-4 text-zinc-500 mr-2" />
+                              <span className="text-xs text-zinc-500">Choose image</span>
+                            </>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Style & Prose */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-zinc-400">Prose Style</label>
+                    <Select value={editProseStyle} onValueChange={setEditProseStyle}>
+                      <SelectTrigger className={`w-full ${inputCls}`}>
+                        <SelectValue placeholder="Select style..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800">
+                        {PROSE_STYLES.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-zinc-400">Tone</label>
+                    <Select value={editTone} onValueChange={setEditTone}>
+                      <SelectTrigger className={`w-full ${inputCls}`}>
+                        <SelectValue placeholder="Select tone..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800">
+                        {TONE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-zinc-400">Custom AI System Prompt</label>
+                    <Textarea
+                      placeholder="Tell the AI how to write for this book..."
+                      value={editCustomPrompt}
+                      onChange={(e) => setEditCustomPrompt(e.target.value)}
+                      className={`${inputCls} min-h-[60px]`}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -684,6 +955,119 @@ export function Bookshelf() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImport} onOpenChange={(open) => { if (!open) { setShowImport(false); setImportResult(null); } }}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Import Document</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-zinc-400">Upload a .txt, .docx, or .pdf file. AI will parse it and fill your Codex and outline automatically.</p>
+            {!importBookId && books.length > 0 ? (
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Select Book</label>
+                <Select onValueChange={(v) => setImportBookId(v)}>
+                  <SelectTrigger className={`w-full ${inputCls}`}>
+                    <SelectValue placeholder="Choose a book..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800">
+                    {books.map((b) => (
+                      <SelectItem key={b.id} value={b.id} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">{b.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-zinc-700 rounded-lg cursor-pointer hover:border-zinc-500 transition-colors">
+              <input
+                type="file"
+                accept=".txt,.docx,.pdf"
+                className="hidden"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              />
+              <Upload className="w-8 h-8 text-zinc-500 mb-2" />
+              <span className="text-sm text-zinc-400">
+                {importFile ? importFile.name : 'Click to select file'}
+              </span>
+              <span className="text-xs text-zinc-600 mt-1">.txt, .docx, .pdf</span>
+            </label>
+            {importResult && (
+              <p className={`text-sm ${importResult.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{importResult}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowImport(false)} className="text-zinc-400">Cancel</Button>
+              <Button
+                onClick={handleImport}
+                disabled={!importBookId || !importFile || importing}
+                className="bg-amber-600 hover:bg-amber-500 text-white"
+              >
+                {importing ? 'Importing...' : 'Import with AI'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Dialog */}
+      <Dialog open={showExport} onOpenChange={(open) => setShowExport(open)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Export Book</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {!exportBookId && books.length > 0 ? (
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-400">Select Book</label>
+                <Select onValueChange={(v) => setExportBookId(v)}>
+                  <SelectTrigger className={`w-full ${inputCls}`}>
+                    <SelectValue placeholder="Choose a book..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800">
+                    {books.map((b) => (
+                      <SelectItem key={b.id} value={b.id} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">{b.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Content</label>
+              <Select defaultValue="manuscript" onValueChange={() => {}}>
+                <SelectTrigger className={`w-full ${inputCls}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800">
+                  <SelectItem value="manuscript" className="text-zinc-100">Manuscript only</SelectItem>
+                  <SelectItem value="codex" className="text-zinc-100">Codex (Story Bible)</SelectItem>
+                  <SelectItem value="outline" className="text-zinc-100">Outline</SelectItem>
+                  <SelectItem value="all" className="text-zinc-100">Everything</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-400">Format</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[{ fmt: 'pdf', label: 'PDF' }, { fmt: 'docx', label: 'DOCX' }, { fmt: 'epub', label: 'EPUB' }, { fmt: 'txt', label: 'TXT' }].map(({ fmt, label }) => (
+                  <Button
+                    key={fmt}
+                    variant="outline"
+                    disabled={!exportBookId || exporting}
+                    onClick={() => handleExport(fmt, 'manuscript')}
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                  >
+                    {exporting ? 'Exporting...' : label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <Button variant="ghost" onClick={() => setShowExport(false)} className="text-zinc-400 w-full">Close</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

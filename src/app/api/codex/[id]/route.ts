@@ -42,6 +42,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(body.metadata !== undefined && { metadata: JSON.stringify(body.metadata) }),
         ...(body.isPinned !== undefined && { isPinned: body.isPinned }),
         ...(body.bookId !== undefined && { bookId: body.bookId || null }),
+        ...(body.imagePath !== undefined && { imagePath: body.imagePath || null }),
       },
     });
 

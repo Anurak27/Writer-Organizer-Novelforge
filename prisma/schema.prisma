@@ -25,6 +25,10 @@ model Book {
   customPrompt   String?   // custom system prompt override for AI
   coverImagePath String?   // path to uploaded cover image
 
+  // Style & Prose settings for AI
+  proseStyle     String?   // e.g. "literary", "minimalist", "flowery", "pulp"
+  tone          String?   // e.g. "dark", "humorous", "romantic", "suspenseful"
+
   // Series support
   seriesId       String?   // null = standalone, otherwise groups books in a series
   seriesOrder    Int?      // order within the series
@@ -94,6 +98,7 @@ model CodexEntry {
   tags        String    @default("[]") // JSON array string
   metadata    String    @default("{}") // JSON object string
   color       String?   // hex color for visual organization
+  imagePath   String?   // path to uploaded character/location image
   isPinned    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -138,6 +143,17 @@ model AiConfig {
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+model UploadedImage {
+  id        String   @id @default(cuid())
+  bookId    String?
+  fileName  String
+  filePath  String   // local path on disk
+  mimeType  String
+  size      Int
+  purpose   String   // "cover", "codex", "inline"
+  createdAt DateTime @default(now())
 }
 
 model AppSetting {

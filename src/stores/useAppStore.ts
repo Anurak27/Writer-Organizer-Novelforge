@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type View = 'auth' | 'dashboard' | 'editor' | 'settings' | 'outline';
+export type View = 'auth' | 'dashboard' | 'editor' | 'settings' | 'outline' | 'preview';
 
 export interface BookSummary {
   id: string;
@@ -25,6 +25,8 @@ export interface BookDetail extends BookSummary {
   synopsis: string | null;
   customPrompt: string | null;
   coverImagePath: string | null;
+  proseStyle: string | null;
+  tone: string | null;
   seriesId: string | null;
   seriesOrder: number | null;
 }
@@ -66,6 +68,7 @@ export interface CodexEntry {
   tags: string[];
   metadata: Record<string, string>;
   color: string;
+  imagePath: string | null;
   isPinned: boolean;
   createdAt: string;
   updatedAt: string;
@@ -141,7 +144,11 @@ interface AppState {
   // Outline view toggle
   outlineView: boolean;
 
+  // Preview modal
+  previewOpen: boolean;
+
   // Actions
+  setPreviewOpen: (open: boolean) => void;
   setToken: (token: string | null) => void;
   setView: (view: View) => void;
   setActiveBookId: (id: string | null) => void;
@@ -184,6 +191,7 @@ const initialState = {
   sidebarOpen: true,
   rightPanelTab: 'codex' as const,
   outlineView: false,
+  previewOpen: false,
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -219,5 +227,6 @@ export const useAppStore = create<AppState>((set) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
   setOutlineView: (open) => set({ outlineView: open }),
+  setPreviewOpen: (open) => set({ previewOpen: open }),
   reset: () => set(initialState),
 }));

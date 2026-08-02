@@ -10,6 +10,7 @@ import { CodexPanel } from '@/components/codex/CodexPanel';
 import { AiPanel } from '@/components/ai/AiPanel';
 import { ChatPanel } from '@/components/ai/ChatPanel';
 import { SnippetsPanel } from '@/components/snippets/SnippetsPanel';
+import { PreviewModal } from './PreviewModal';
 import {
   ArrowLeft,
   BookOpen,
@@ -232,6 +233,9 @@ export function EditorView() {
           )}
         </div>
       </div>
+
+      {/* Preview Modal */}
+      <PreviewModal />
     </div>
   );
 }

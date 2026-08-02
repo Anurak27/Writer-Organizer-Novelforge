@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { bookId, type, name, description, aliases, tags, metadata, isPinned } = await request.json();
+    const { bookId, type, name, description, aliases, tags, metadata, isPinned, imagePath } = await request.json();
 
     if (!type || !name?.trim()) {
       return NextResponse.json({ error: 'Type and name are required' }, { status: 400 });
@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
         tags: JSON.stringify(tags || []),
         metadata: JSON.stringify(metadata || {}),
         isPinned: isPinned ?? false,
+        imagePath: imagePath || null,
       },
     });
 

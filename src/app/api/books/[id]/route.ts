@@ -35,7 +35,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
 
   try {
-    const { title, description, genre, status, penName, language, wordCountGoal, pov, povTense, synopsis, customPrompt, seriesId, seriesOrder } = await request.json();
+    const { title, description, genre, status, penName, language, wordCountGoal, pov, povTense, synopsis, customPrompt, seriesId, seriesOrder, proseStyle, tone, coverImagePath } = await request.json();
     const book = await db.book.update({
       where: { id },
       data: {
@@ -50,6 +50,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(povTense !== undefined && { povTense }),
         ...(synopsis !== undefined && { synopsis: synopsis?.trim() || null }),
         ...(customPrompt !== undefined && { customPrompt: customPrompt?.trim() || null }),
+        ...(proseStyle !== undefined && { proseStyle: proseStyle || null }),
+        ...(tone !== undefined && { tone: tone || null }),
+        ...(coverImagePath !== undefined && { coverImagePath: coverImagePath || null }),
         ...(seriesId !== undefined && { seriesId: seriesId || null }),
         ...(seriesOrder !== undefined && { seriesOrder: seriesOrder != null ? Number(seriesOrder) : null }),
       },

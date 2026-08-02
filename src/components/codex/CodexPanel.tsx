@@ -33,6 +33,7 @@ import {
   Pin,
   PinOff,
   X,
+  ImagePlus,
 } from 'lucide-react';
 
 const TYPE_ICONS: Record<string, typeof User> = {
@@ -55,6 +56,7 @@ const EMPTY_FORM = {
   description: '',
   aliases: '',
   tags: '',
+  imagePath: '',
 };
 
 export function CodexPanel() {
@@ -65,6 +67,8 @@ export function CodexPanel() {
   const [editing, setEditing] = useState<CodexEntry | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [formImage, setFormImage] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const token = useAppStore((s) => s.token);
   const activeBookId = useAppStore((s) => s.activeBookId);
@@ -141,6 +145,7 @@ export function CodexPanel() {
           .map((t) => t.trim())
           .filter(Boolean),
         bookId: activeBookId || null,
+        imagePath: formImage || null,
       };
 
       if (editing) {
@@ -166,6 +171,7 @@ export function CodexPanel() {
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY_FORM);
+      setFormImage('');
       fetchEntries();
     } catch {
       // silent
@@ -182,7 +188,9 @@ export function CodexPanel() {
       description: entry.description,
       aliases: entry.aliases.join(', '),
       tags: entry.tags.join(', '),
+      imagePath: entry.imagePath || '',
     });
+    setFormImage(entry.imagePath || '');
     setShowForm(true);
   };
 
@@ -296,11 +304,15 @@ export function CodexPanel() {
                   className="group px-2 py-2 rounded-lg hover:bg-zinc-900/50 cursor-pointer transition-colors"
                 >
                   <div className="flex items-start gap-2">
-                    <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${
-                      entry.type === 'character' ? 'text-violet-400' :
-                      entry.type === 'location' ? 'text-emerald-400' :
-                      entry.type === 'lore' ? 'text-amber-400' : 'text-cyan-400'
-                    }`} />
+                    {entry.imagePath ? (
+                      <img src={entry.imagePath} alt={entry.name} className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 border border-zinc-700" />
+                    ) : (
+                      <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${
+                        entry.type === 'character' ? 'text-violet-400' :
+                        entry.type === 'location' ? 'text-emerald-400' :
+                        entry.type === 'lore' ? 'text-amber-400' : 'text-cyan-400'
+                      }`} />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-zinc-200 truncate">
@@ -406,6 +418,60 @@ export function CodexPanel() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 min-h-[120px]"
             />
+
+            {/* Image Upload */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400">Image</label>
+              <div className="flex items-center gap-3">
+                {formImage ? (
+                  <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-zinc-700 shrink-0">
+                    <img src={formImage} alt="Entry" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setFormImage('')}
+                      className="absolute top-0 right-0 w-4 h-4 bg-zinc-900/80 rounded-full flex items-center justify-center"
+                    >
+                      <X className="w-2.5 h-2.5 text-zinc-400" />
+                    </button>
+                  </div>
+                ) : null}
+                <label className="flex-1 cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f || !token) return;
+                      setUploadingImage(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append('file', f);
+                        fd.append('purpose', 'codex');
+                        if (activeBookId) fd.append('bookId', activeBookId);
+                        const res = await fetch('/api/upload', {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                          body: fd,
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setFormImage(data.url);
+                        }
+                      } catch { /* ignore */ }
+                      setUploadingImage(false);
+                    }}
+                  />
+                  <div className="flex items-center justify-center h-10 border border-dashed border-zinc-700 rounded-md hover:border-zinc-500 transition-colors">
+                    {uploadingImage ? (
+                      <span className="text-xs text-zinc-500">Uploading...</span>
+                    ) : (
+                      <><ImagePlus className="w-4 h-4 text-zinc-500 mr-2" /><span className="text-xs text-zinc-500">Add image</span></>
+                    )}
+                  </div>
+                </label>
+              </div>
+            </div>
 
             <Input
               placeholder="Aliases (comma-separated, e.g. John, Johnny, JC)"

@@ -1,0 +1,691 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { useAppStore, BookSummary, BookDetail } from '@/stores/useAppStore';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Input } from '@/components/ui/input';
+     7→import { Textarea } from '@/components/ui/textarea';
+     8→import { Badge } from '@/components/ui/badge';
+     9→import {
+    10→  Select,
+    11→  SelectContent,
+    12→  SelectItem,
+    13→  SelectTrigger,
+    14→  SelectValue,
+    15→} from '@/components/ui/select';
+    16→import {
+    17→  Dialog,
+    18→  DialogContent,
+    19→  DialogHeader,
+    20→  DialogTitle,
+    21→  DialogTrigger,
+    22→} from '@/components/ui/dialog';
+    23→import {
+    24→  Plus,
+    25→  BookOpen,
+    26→  FileText,
+    27→  Settings,
+    28→  Trash2,
+    29→  PenLine,
+    30→  MoreVertical,
+    31→  Pencil,
+    32→  Bookmark,
+    33→} from 'lucide-react';
+    34→import {
+    35→  DropdownMenu,
+    36→  DropdownMenuContent,
+    37→  DropdownMenuItem,
+    38→  DropdownMenuTrigger,
+    39→} from '@/components/ui/dropdown-menu';
+    40→
+    41→const STATUS_COLORS: Record<string, string> = {
+    42→  draft: 'bg-zinc-700 text-zinc-300',
+    43→  in_progress: 'bg-amber-600/20 text-amber-400 border border-amber-600/30',
+    44→  completed: 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30',
+    45→  on_hiatus: 'bg-zinc-600/30 text-zinc-400',
+    46→};
+    47→
+    48→const STATUS_LABELS: Record<string, string> = {
+    49→  draft: 'Draft',
+    50→  in_progress: 'In Progress',
+    51→  completed: 'Completed',
+    52→  on_hiatus: 'On Hiatus',
+    53→};
+    54→
+    55→const POV_OPTIONS: { value: string; label: string }[] = [
+    56→  { value: 'third_past', label: 'Third Person, Past Tense' },
+    57→  { value: 'third_present', label: 'Third Person, Present Tense' },
+    58→  { value: 'first_past', label: 'First Person, Past Tense' },
+    59→  { value: 'first_present', label: 'First Person, Present Tense' },
+    60→  { value: 'third_omniscient', label: 'Third Person Omniscient' },
+    61→  { value: 'second_past', label: 'Second Person, Past Tense' },
+    62→  { value: 'second_present', label: 'Second Person, Present Tense' },
+    63→];
+    64→
+    65→const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+    66→  { value: 'en', label: 'English' },
+    67→  { value: 'es', label: 'Spanish' },
+    68→  { value: 'fr', label: 'French' },
+    69→  { value: 'de', label: 'German' },
+    70→  { value: 'pt', label: 'Portuguese' },
+    71→  { value: 'it', label: 'Italian' },
+    72→  { value: 'ja', label: 'Japanese' },
+    73→  { value: 'zh', label: 'Chinese' },
+    74→];
+    75→
+    76→interface BookMeta {
+    77→  wordCountGoal: number | null;
+    78→  seriesId: string | null;
+    79→}
+    80→
+    81→function formatWordCount(words: number): string {
+    82→  if (words >= 1000) return `${(words / 1000).toFixed(1)}k`;
+    83→  return String(words);
+    84→}
+    85→
+    86→export function Bookshelf() {
+    87→  const [books, setBooks] = useState<BookSummary[]>([]);
+    88→  const [loading, setLoading] = useState(true);
+    89→  const [showCreate, setShowCreate] = useState(false);
+    90→  const [newTitle, setNewTitle] = useState('');
+    91→  const [newGenre, setNewGenre] = useState('');
+    92→  const [creating, setCreating] = useState(false);
+    93→
+    94→  // Advanced create fields
+    95→  const [showAdvanced, setShowAdvanced] = useState(false);
+    96→  const [newDescription, setNewDescription] = useState('');
+    97→  const [newPenName, setNewPenName] = useState('');
+    98→  const [newPov, setNewPov] = useState('third_past');
+    99→  const [newWordCountGoal, setNewWordCountGoal] = useState('');
+   100→  const [newLanguage, setNewLanguage] = useState('en');
+   101→
+   102→  // Edit dialog
+   103→  const [showEdit, setShowEdit] = useState(false);
+   104→  const [editBookId, setEditBookId] = useState<string | null>(null);
+   105→  const [editTitle, setEditTitle] = useState('');
+   106→  const [editGenre, setEditGenre] = useState('');
+   107→  const [editDescription, setEditDescription] = useState('');
+   108→  const [editPenName, setEditPenName] = useState('');
+   109→  const [editPov, setEditPov] = useState('third_past');
+   110→  const [editWordCountGoal, setEditWordCountGoal] = useState('');
+   111→  const [editLanguage, setEditLanguage] = useState('en');
+   112→  const [editShowAdvanced, setEditShowAdvanced] = useState(false);
+   113→  const [editLoading, setEditLoading] = useState(false);
+   114→  const [editSaving, setEditSaving] = useState(false);
+   115→
+   116→  // Cached book metadata for cards (wordCountGoal, seriesId)
+   117→  const [bookMeta, setBookMeta] = useState<Record<string, BookMeta>>({});
+   118→
+   119→  const setView = useAppStore((s) => s.setView);
+   120→  const setActiveBookId = useAppStore((s) => s.setActiveBookId);
+   121→
+   122→  const fetchBooks = useCallback(async () => {
+   123→    try {
+   124→      const res = await fetch('/api/books', {
+   125→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   126→      });
+   127→      if (res.ok) setBooks(await res.json());
+   128→    } catch {
+   129→      // silent fail
+   130→    } finally {
+   131→      setLoading(false);
+   132→    }
+   133→  }, []);
+   134→
+   135→  useEffect(() => {
+   136→    fetchBooks();
+   137→  }, [fetchBooks]);
+   138→
+   139→  const resetCreateForm = useCallback(() => {
+   140→    setNewTitle('');
+   141→    setNewGenre('');
+   142→    setNewDescription('');
+   143→    setNewPenName('');
+   144→    setNewPov('third_past');
+   145→    setNewWordCountGoal('');
+   146→    setNewLanguage('en');
+   147→    setShowAdvanced(false);
+   148→  }, []);
+   149→
+   150→  const handleCreate = async () => {
+   151→    if (!newTitle.trim()) return;
+   152→    setCreating(true);
+   153→    try {
+   154→      const res = await fetch('/api/books', {
+   155→        method: 'POST',
+   156→        headers: {
+   157→          'Content-Type': 'application/json',
+   158→          Authorization: `Bearer ${useAppStore.getState().token}`,
+   159→        },
+   160→        body: JSON.stringify({
+   161→          title: newTitle,
+   162→          genre: newGenre.trim() || null,
+   163→          description: newDescription.trim() || null,
+   164→          penName: newPenName.trim() || null,
+   165→          pov: newPov,
+   166→          wordCountGoal: newWordCountGoal ? parseInt(newWordCountGoal, 10) : null,
+   167→          language: newLanguage,
+   168→        }),
+   169→      });
+   170→      if (res.ok) {
+   171→        resetCreateForm();
+   172→        setShowCreate(false);
+   173→        fetchBooks();
+   174→      }
+   175→    } catch {
+   176→      // silent fail
+   177→    } finally {
+   178→      setCreating(false);
+   179→    }
+   180→  };
+   181→
+   182→  const handleDelete = async (id: string) => {
+   183→    if (!confirm('Delete this book and all its chapters and scenes?')) return;
+   184→    try {
+   185→      await fetch(`/api/books/${id}`, {
+   186→        method: 'DELETE',
+   187→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   188→      });
+   189→      fetchBooks();
+   190→    } catch {
+   191→      // silent fail
+   192→    }
+   193→  };
+   194→
+   195→  const fetchBookDetail = async (id: string): Promise<BookDetail | null> => {
+   196→    try {
+   197→      const res = await fetch(`/api/books/${id}`, {
+   198→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   199→      });
+   200→      if (res.ok) {
+   201→        const detail: BookDetail = await res.json();
+   202→        // Cache the metadata for card display
+   203→        setBookMeta((prev) => ({
+   204→          ...prev,
+   205→          [id]: {
+   206→            wordCountGoal: detail.wordCountGoal,
+   207→            seriesId: detail.seriesId,
+   208→          },
+   209→        }));
+   210→        return detail;
+   211→      }
+   212→    } catch {
+   213→      // silent fail
+   214→    }
+   215→    return null;
+   216→  };
+   217→
+   218→  const openEditDialog = async (id: string, e: React.MouseEvent) => {
+   219→    e.stopPropagation();
+   220→    setEditBookId(id);
+   221→    setShowEdit(true);
+   222→    setEditLoading(true);
+   223→    setEditShowAdvanced(false);
+   224→
+   225→    const detail = await fetchBookDetail(id);
+   226→    if (detail) {
+   227→      setEditTitle(detail.title);
+   228→      setEditGenre(detail.genre || '');
+   229→      setEditDescription(detail.description || '');
+   230→      setEditPenName(detail.penName || '');
+   231→      setEditPov(detail.pov || 'third_past');
+   232→      setEditWordCountGoal(detail.wordCountGoal ? String(detail.wordCountGoal) : '');
+   233→      setEditLanguage(detail.language || 'en');
+   234→    }
+   235→    setEditLoading(false);
+   236→  };
+   237→
+   238→  const handleEditSave = async () => {
+   239→    if (!editBookId || !editTitle.trim()) return;
+   240→    setEditSaving(true);
+   241→    try {
+   242→      const res = await fetch(`/api/books/${editBookId}`, {
+   243→        method: 'PUT',
+   244→        headers: {
+   245→          'Content-Type': 'application/json',
+   246→          Authorization: `Bearer ${useAppStore.getState().token}`,
+   247→        },
+   248→        body: JSON.stringify({
+   249→          title: editTitle,
+   250→          genre: editGenre.trim() || null,
+   251→          description: editDescription.trim() || null,
+   252→          penName: editPenName.trim() || null,
+   253→          pov: editPov,
+   254→          wordCountGoal: editWordCountGoal ? parseInt(editWordCountGoal, 10) : null,
+   255→          language: editLanguage,
+   256→        }),
+   257→      });
+   258→      if (res.ok) {
+   259→        setShowEdit(false);
+   260→        setEditBookId(null);
+   261→        // Update the cached meta
+   262→        setBookMeta((prev) => ({
+   263→          ...prev,
+   264→          [editBookId]: {
+   265→            wordCountGoal: editWordCountGoal ? parseInt(editWordCountGoal, 10) : null,
+   266→            seriesId: prev[editBookId]?.seriesId ?? null,
+   267→          },
+   268→        }));
+   269→        fetchBooks();
+   270→      }
+   271→    } catch {
+   272→      // silent fail
+   273→    } finally {
+   274→      setEditSaving(false);
+   275→    }
+   276→  };
+   277→
+   278→  const openBook = (id: string) => {
+   279→    setActiveBookId(id);
+   280→    setView('editor');
+   281→  };
+   282→
+   283→  const totalWords = books.reduce((sum, b) => sum + b.totalWords, 0);
+   284→
+   285→  const inputCls =
+   286→    'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500';
+   287→
+   288→  return (
+   289→    <div className="min-h-screen bg-zinc-950">
+   290→      <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-10">
+   291→        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+   292→          <div className="flex items-center gap-3">
+   293→            <BookOpen className="w-6 h-6 text-amber-500" />
+   294→            <h1 className="text-xl font-bold text-zinc-100 tracking-tight">NovelForge</h1>
+   295→          </div>
+   296→          <div className="flex items-center gap-2">
+   297→            <Button
+   298→              variant="ghost"
+   299→              size="sm"
+   300→              onClick={() => setView('settings')}
+   301→              className="text-zinc-400 hover:text-zinc-200"
+   302→            >
+   303→              <Settings className="w-4 h-4 mr-2" />
+   304→              <span className="hidden sm:inline">Settings</span>
+   305→            </Button>
+   306→          </div>
+   307→        </div>
+   308→      </header>
+   309→
+   310→      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+   311→        {/* Stats Bar */}
+   312→        <div className="flex items-center justify-between mb-8">
+   313→          <div>
+   314→            <h2 className="text-2xl font-bold text-zinc-100">My Books</h2>
+   315→            <p className="text-zinc-500 text-sm mt-1">
+   316→              {books.length} {books.length === 1 ? 'book' : 'books'} &middot;{' '}
+   317→              {formatWordCount(totalWords)} words total
+   318→            </p>
+   319→          </div>
+   320→
+   321→          {/* Create Dialog */}
+   322→          <Dialog open={showCreate} onOpenChange={(open) => {
+   323→            if (!open) resetCreateForm();
+   324→            setShowCreate(open);
+   325→          }}>
+   326→            <DialogTrigger asChild>
+   327→              <Button className="bg-amber-600 hover:bg-amber-500 text-white">
+   328→                <Plus className="w-4 h-4 mr-2" />
+   329→                New Book
+   330→              </Button>
+   331→            </DialogTrigger>
+   332→            <DialogContent className="bg-zinc-900 border-zinc-800">
+   333→              <DialogHeader>
+   334→                <DialogTitle className="text-zinc-100">Create New Book</DialogTitle>
+   335→              </DialogHeader>
+   336→              <div className="space-y-4 pt-2">
+   337→                <Input
+   338→                  placeholder="Book Title"
+   339→                  value={newTitle}
+   340→                  onChange={(e) => setNewTitle(e.target.value)}
+   341→                  className={inputCls}
+   342→                  autoFocus
+   343→                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+   344→                />
+   345→                <Input
+   346→                  placeholder="Genre (optional)"
+   347→                  value={newGenre}
+   348→                  onChange={(e) => setNewGenre(e.target.value)}
+   349→                  className={inputCls}
+   350→                />
+   351→
+   352→                {/* Advanced Options Toggle */}
+   353→                <button
+   354→                  type="button"
+   355→                  onClick={() => setShowAdvanced((prev) => !prev)}
+   356→                  className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+   357→                >
+   358→                  Advanced options {showAdvanced ? '▲' : '▼'}
+   359→                </button>
+   360→
+   361→                {showAdvanced && (
+   362→                  <div className="space-y-4 pl-0">
+   363→                    <Textarea
+   364→                      placeholder="Description / Synopsis (optional)"
+   365→                      value={newDescription}
+   366→                      onChange={(e) => setNewDescription(e.target.value)}
+   367→                      className={`${inputCls} min-h-[80px]`}
+   368→                    />
+   369→                    <Input
+   370→                      placeholder="Pen Name (optional)"
+   371→                      value={newPenName}
+   372→                      onChange={(e) => setNewPenName(e.target.value)}
+   373→                      className={inputCls}
+   374→                    />
+   375→                    <div className="space-y-1.5">
+   376→                      <label className="text-xs text-zinc-400">Point of View</label>
+   377→                      <Select value={newPov} onValueChange={setNewPov}>
+   378→                        <SelectTrigger className={`w-full ${inputCls}`}>
+   379→                          <SelectValue />
+   380→                        </SelectTrigger>
+   381→                        <SelectContent className="bg-zinc-900 border-zinc-800">
+   382→                          {POV_OPTIONS.map((opt) => (
+   383→                            <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   384→                              {opt.label}
+   385→                            </SelectItem>
+   386→                          ))}
+   387→                        </SelectContent>
+   388→                      </Select>
+   389→                    </div>
+   390→                    <Input
+   391→                      type="number"
+   392→                      placeholder="Word Count Goal (e.g. 80000)"
+   393→                      value={newWordCountGoal}
+   394→                      onChange={(e) => setNewWordCountGoal(e.target.value)}
+   395→                      className={inputCls}
+   396→                      min={0}
+   397→                    />
+   398→                    <div className="space-y-1.5">
+   399→                      <label className="text-xs text-zinc-400">Language</label>
+   400→                      <Select value={newLanguage} onValueChange={setNewLanguage}>
+   401→                        <SelectTrigger className={`w-full ${inputCls}`}>
+   402→                          <SelectValue />
+   403→                        </SelectTrigger>
+   404→                        <SelectContent className="bg-zinc-900 border-zinc-800">
+   405→                          {LANGUAGE_OPTIONS.map((opt) => (
+   406→                            <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   407→                              {opt.label}
+   408→                            </SelectItem>
+   409→                          ))}
+   410→                        </SelectContent>
+   411→                      </Select>
+   412→                    </div>
+   413→                  </div>
+   414→                )}
+   415→
+   416→                <div className="flex justify-end gap-2 pt-2">
+   417→                  <Button
+   418→                    variant="ghost"
+   419→                    onClick={() => {
+   420→                      resetCreateForm();
+   421→                      setShowCreate(false);
+   422→                    }}
+   423→                    className="text-zinc-400"
+   424→                  >
+   425→                    Cancel
+   426→                  </Button>
+   427→                  <Button
+   428→                    onClick={handleCreate}
+   429→                    disabled={!newTitle.trim() || creating}
+   430→                    className="bg-amber-600 hover:bg-amber-500 text-white"
+   431→                  >
+   432→                    {creating ? 'Creating...' : 'Create'}
+   433→                  </Button>
+   434→                </div>
+   435→              </div>
+   436→            </DialogContent>
+   437→          </Dialog>
+   438→        </div>
+   439→
+   440→        {/* Book Grid */}
+   441→        {loading ? (
+   442→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   443→            {[1, 2, 3].map((i) => (
+   444→              <div key={i} className="h-48 bg-zinc-900 rounded-xl border border-zinc-800 animate-pulse" />
+   445→            ))}
+   446→          </div>
+   447→        ) : books.length === 0 ? (
+   448→          <div className="text-center py-20">
+   449→            <BookOpen className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+   450→            <h3 className="text-zinc-400 text-lg font-medium">No books yet</h3>
+   451→            <p className="text-zinc-600 text-sm mt-1">Create your first book to start writing.</p>
+   452→          </div>
+   453→        ) : (
+   454→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   455→            {books.map((book) => {
+   456→              const meta = bookMeta[book.id];
+   457→              const goal = meta?.wordCountGoal;
+   458→              const hasSeries = meta?.seriesId != null;
+   459→              const progress =
+   460→                goal && goal > 0
+   461→                  ? Math.min(100, (book.totalWords / goal) * 100)
+   462→                  : null;
+   463→              const goalMet = progress !== null && progress >= 100;
+   464→
+   465→              return (
+   466→                <div
+   467→                  key={book.id}
+   468→                  className={`group relative border rounded-xl p-5 cursor-pointer transition-all duration-200 ${
+   469→                    goalMet
+   470→                      ? 'bg-emerald-950/30 border-emerald-900/40 hover:border-emerald-800/60'
+   471→                      : 'bg-zinc-900/80 border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900'
+   472→                  }`}
+   473→                  onClick={() => openBook(book.id)}
+   474→                >
+   475→                  <div className="flex items-start justify-between mb-3">
+   476→                    <div className="flex-1 min-w-0">
+   477→                      <div className="flex items-center gap-2">
+   478→                        <h3 className="font-semibold text-zinc-100 truncate">{book.title}</h3>
+   479→                        {hasSeries && (
+   480→                          <Badge
+   481→                            variant="outline"
+   482→                            className="shrink-0 bg-zinc-800/80 text-zinc-400 border-zinc-700 text-[10px] px-1.5 py-0"
+   483→                          >
+   484→                            <Bookmark className="w-2.5 h-2.5 mr-0.5" />
+   485→                            Series
+   486→                          </Badge>
+   487→                        )}
+   488→                      </div>
+   489→                      {book.genre && (
+   490→                        <p className="text-zinc-500 text-sm mt-0.5">{book.genre}</p>
+   491→                      )}
+   492→                    </div>
+   493→                    <DropdownMenu>
+   494→                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+   495→                        <Button
+   496→                          variant="ghost"
+   497→                          size="icon"
+   498→                          className="h-8 w-8 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity"
+   499→                        >
+   500→                          <MoreVertical className="w-4 h-4" />
+   501→                        </Button>
+   502→                      </DropdownMenuTrigger>
+   503→                      <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+   504→                        <DropdownMenuItem
+   505→                          className="text-zinc-300 focus:text-zinc-100"
+   506→                          onClick={(e) => openEditDialog(book.id, e)}
+   507→                        >
+   508→                          <Pencil className="w-4 h-4 mr-2" />
+   509→                          Edit Details
+   510→                        </DropdownMenuItem>
+   511→                        <DropdownMenuItem
+   512→                          className="text-red-400 focus:text-red-300"
+   513→                          onClick={(e) => {
+   514→                            e.stopPropagation();
+   515→                            handleDelete(book.id);
+   516→                          }}
+   517→                        >
+   518→                          <Trash2 className="w-4 h-4 mr-2" />
+   519→                          Delete Book
+   520→                        </DropdownMenuItem>
+   521→                      </DropdownMenuContent>
+   522→                    </DropdownMenu>
+   523→                  </div>
+   524→
+   525→                  {book.description && (
+   526→                    <p className="text-zinc-500 text-sm line-clamp-2 mb-4">{book.description}</p>
+   527→                  )}
+   528→
+   529→                  {/* Word Count Goal Progress */}
+   530→                  {goal && goal > 0 && (
+   531→                    <div className="mb-4">
+   532→                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-1.5">
+   533→                        <span>
+   534→                          {formatWordCount(book.totalWords)} / {formatWordCount(goal)} words
+   535→                        </span>
+   536→                        <span>{Math.round(progress ?? 0)}%</span>
+   537→                      </div>
+   538→                      <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+   539→                        <div
+   540→                          className={`h-full rounded-full transition-all duration-500 ${
+   541→                            goalMet
+   542→                              ? 'bg-emerald-500'
+   543→                              : 'bg-amber-500'
+   544→                          }`}
+   545→                          style={{ width: `${progress ?? 0}%` }}
+   546→                        />
+   547→                      </div>
+   548→                    </div>
+   549→                  )}
+   550→
+   551→                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-800/50">
+   552→                    <div className="flex items-center gap-3 text-xs text-zinc-500">
+   553→                      <span className="flex items-center gap-1">
+   554→                        <FileText className="w-3.5 h-3.5" />
+   555→                        {book.chapterCount} {book.chapterCount === 1 ? 'ch' : 'ch'}
+   556→                      </span>
+   557→                      <span className="flex items-center gap-1">
+   558→                        <PenLine className="w-3.5 h-3.5" />
+   559→                        {formatWordCount(book.totalWords)} words
+   560→                      </span>
+   561→                    </div>
+   562→                    <Badge variant="outline" className={STATUS_COLORS[book.status] || ''}>
+   563→                      {STATUS_LABELS[book.status] || book.status}
+   564→                    </Badge>
+   565→                  </div>
+   566→                </div>
+   567→              );
+   568→            })}
+   569→          </div>
+   570→        )}
+   571→      </main>
+   572→
+   573→      {/* Edit Details Dialog */}
+   574→      <Dialog open={showEdit} onOpenChange={(open) => {
+   575→        if (!open) setEditBookId(null);
+   576→        setShowEdit(open);
+   577→      }}>
+   578→        <DialogContent className="bg-zinc-900 border-zinc-800">
+   579→          <DialogHeader>
+   580→            <DialogTitle className="text-zinc-100">Edit Book Details</DialogTitle>
+   581→          </DialogHeader>
+   582→          {editLoading ? (
+   583→            <div className="py-8 flex items-center justify-center">
+   584→              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+   585→            </div>
+   586→          ) : (
+   587→            <div className="space-y-4 pt-2">
+   588→              <Input
+   589→                placeholder="Book Title"
+   590→                value={editTitle}
+   591→                onChange={(e) => setEditTitle(e.target.value)}
+   592→                className={inputCls}
+   593→                autoFocus
+   594→              />
+   595→              <Input
+   596→                placeholder="Genre (optional)"
+   597→                value={editGenre}
+   598→                onChange={(e) => setEditGenre(e.target.value)}
+   599→                className={inputCls}
+   600→              />
+   601→
+   602→              {/* Advanced Options Toggle */}
+   603→              <button
+   604→                type="button"
+   605→                onClick={() => setEditShowAdvanced((prev) => !prev)}
+   606→                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+   607→              >
+   608→                Advanced options {editShowAdvanced ? '▲' : '▼'}
+   609→              </button>
+   610→
+   611→              {editShowAdvanced && (
+   612→                <div className="space-y-4 pl-0">
+   613→                  <Textarea
+   614→                    placeholder="Description / Synopsis (optional)"
+   615→                    value={editDescription}
+   616→                    onChange={(e) => setEditDescription(e.target.value)}
+   617→                    className={`${inputCls} min-h-[80px]`}
+   618→                  />
+   619→                  <Input
+   620→                    placeholder="Pen Name (optional)"
+   621→                    value={editPenName}
+   622→                    onChange={(e) => setEditPenName(e.target.value)}
+   623→                    className={inputCls}
+   624→                  />
+   625→                  <div className="space-y-1.5">
+   626→                    <label className="text-xs text-zinc-400">Point of View</label>
+   627→                    <Select value={editPov} onValueChange={setEditPov}>
+   628→                      <SelectTrigger className={`w-full ${inputCls}`}>
+   629→                        <SelectValue />
+   630→                      </SelectTrigger>
+   631→                      <SelectContent className="bg-zinc-900 border-zinc-800">
+   632→                        {POV_OPTIONS.map((opt) => (
+   633→                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   634→                            {opt.label}
+   635→                          </SelectItem>
+   636→                        ))}
+   637→                      </SelectContent>
+   638→                    </Select>
+   639→                  </div>
+   640→                  <Input
+   641→                    type="number"
+   642→                    placeholder="Word Count Goal (e.g. 80000)"
+   643→                    value={editWordCountGoal}
+   644→                    onChange={(e) => setEditWordCountGoal(e.target.value)}
+   645→                    className={inputCls}
+   646→                    min={0}
+   647→                  />
+   648→                  <div className="space-y-1.5">
+   649→                    <label className="text-xs text-zinc-400">Language</label>
+   650→                    <Select value={editLanguage} onValueChange={setEditLanguage}>
+   651→                      <SelectTrigger className={`w-full ${inputCls}`}>
+   652→                        <SelectValue />
+   653→                      </SelectTrigger>
+   654→                      <SelectContent className="bg-zinc-900 border-zinc-800">
+   655→                        {LANGUAGE_OPTIONS.map((opt) => (
+   656→                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   657→                            {opt.label}
+   658→                          </SelectItem>
+   659→                        ))}
+   660→                      </SelectContent>
+   661→                    </Select>
+   662→                  </div>
+   663→                </div>
+   664→              )}
+   665→
+   666→              <div className="flex justify-end gap-2 pt-2">
+   667→                <Button
+   668→                  variant="ghost"
+   669→                  onClick={() => {
+   670→                    setShowEdit(false);
+   671→                    setEditBookId(null);
+   672→                  }}
+   673→                  className="text-zinc-400"
+   674→                >
+   675→                  Cancel
+   676→                </Button>
+   677→                <Button
+   678→                  onClick={handleEditSave}
+   679→                  disabled={!editTitle.trim() || editSaving}
+   680→                  className="bg-amber-600 hover:bg-amber-500 text-white"
+   681→                >
+   682→                  {editSaving ? 'Saving...' : 'Save Changes'}
+   683→                </Button>
+   684→              </div>
+   685→            </div>
+   686→          )}
+   687→        </DialogContent>
+   688→      </Dialog>
+   689→    </div>
+   690→  );
+   691→}
