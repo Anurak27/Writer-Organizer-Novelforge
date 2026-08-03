@@ -30,3 +30,26 @@ Stage Summary:
 - Style/Prose/Tone/Custom Prompt settings per book for AI
 - Auto-save changed to 30 seconds
 - Manuscript preview modal shows formatted book layout
+---
+Task ID: 1
+Agent: main
+Task: Fix all reported bugs - Codex visibility, import errors, export errors, missing upload route
+
+Work Log:
+- Analyzed screenshot showing import dialog AI error
+- Discovered /api/upload/route.ts was completely missing
+- Created /api/upload/route.ts with POST (file upload) and GET (file serving for Vercel /tmp)
+- Added View Codex option in book dropdown menu
+- Added Raw Import mode button alongside Import with AI
+- Fixed EPUB export using correct epub-gen-memory default function API
+- Fixed Buffer type issues in export routes (wrapped in Uint8Array)
+- Added epub-gen-memory to serverExternalPackages
+- Added error feedback for export failures in frontend
+- Pushed to GitHub and deployed to Vercel successfully
+
+Stage Summary:
+- Upload route created at src/app/api/upload/route.ts
+- Import dialog now has Raw Import and AI Import buttons
+- Export errors now show alerts with error details
+- Codex accessible via View Codex in book dropdown
+- Deployed: https://writer-organizer-novelforge.vercel.app
