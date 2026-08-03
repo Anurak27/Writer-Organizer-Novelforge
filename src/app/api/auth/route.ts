@@ -5,8 +5,9 @@ export async function GET() {
   try {
     const set = await isPasswordSet();
     return NextResponse.json({ passwordSet: set });
-  } catch {
-    return NextResponse.json({ error: 'Failed to check auth status' }, { status: 500 });
+  } catch (err) {
+    console.error('Auth GET error:', err);
+    return NextResponse.json({ error: 'Failed to check auth status', details: String(err) }, { status: 500 });
   }
 }
 
@@ -35,7 +36,8 @@ export async function POST(request: NextRequest) {
       if (!set) {
         return NextResponse.json({ error: 'No password set. Use setup first.' }, { status: 400 });
       }
-      const storedHash = await (await import('@/lib/auth')).getSetting('master_password_hash');
+      const { getSetting } = await import('@/lib/auth');
+      const storedHash = await getSetting('master_password_hash');
       if (!storedHash) {
         return NextResponse.json({ error: 'Auth configuration error' }, { status: 500 });
       }
@@ -49,7 +51,16 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid action. Use "setup" or "login".' }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: 'Auth request failed' }, { status: 500 });
+  } catch (err) {
+    console.error('Auth POST error:', err);
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    // Detect common database connection issues
+    if (msg.includes('connect') || msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND')) {
+      return NextResponse.json({ 
+        error: 'Database connection failed. Make sure DATABASE_URL is set correctly in Vercel environment variables.', 
+        details: msg 
+      }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'Auth request failed', details: msg }, { status: 500 });
   }
 }

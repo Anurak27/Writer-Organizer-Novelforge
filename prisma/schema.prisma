@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Book {
@@ -12,28 +13,21 @@ model Book {
   title          String
   description    String?
   genre          String?
-  status         String    @default("draft") // draft, in_progress, completed, on_hiatus
+  status         String    @default("draft")
   sortOrder      Int       @default(0)
-
-  // Novelcrafter-style metadata
-  penName        String?   // author / pen name
-  language       String    @default("en") // en, es, fr, de, etc.
-  wordCountGoal  Int?      // target word count (null = no goal)
-  pov            String    @default("third_past") // first_past, first_present, second_past, second_present, third_past, third_present, third_omniscient
-  povTense       String    @default("past") // past, present
-  synopsis       String?   // book-level synopsis
-  customPrompt   String?   // custom system prompt override for AI
-  coverImagePath String?   // path to uploaded cover image
-
-  // Style & Prose settings for AI
-  proseStyle     String?   // e.g. "literary", "minimalist", "flowery", "pulp"
-  tone          String?   // e.g. "dark", "humorous", "romantic", "suspenseful"
-
-  // Series support
-  seriesId       String?   // null = standalone, otherwise groups books in a series
-  seriesOrder    Int?      // order within the series
+  penName        String?
+  language       String    @default("en")
+  wordCountGoal  Int?
+  pov            String    @default("third_past")
+  povTense       String    @default("past")
+  synopsis       String?
+  customPrompt   String?
+  coverImagePath String?
+  proseStyle     String?
+  tone           String?
+  seriesId       String?
+  seriesOrder    Int?
   seriesParent   Book?     @relation("SeriesBooks", fields: [seriesId], references: [id], onDelete: SetNull)
-
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -68,17 +62,12 @@ model Scene {
   title           String    @default("Untitled Scene")
   content         String    @default("")
   notes           String?
-  status          String    @default("outline") // outline, draft, in_progress, needs_revision, complete
+  status          String    @default("outline")
   wordCount       Int       @default(0)
   sortOrder       Int       @default(0)
-
-  // POV override per scene (null = inherit from book)
   pov             String?
   povTense        String?
-
-  // Pinned codex entries for AI context (JSON array of entry IDs)
   pinnedCodexIds  String    @default("[]")
-
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -90,15 +79,15 @@ model Scene {
 
 model CodexEntry {
   id          String    @id @default(cuid())
-  bookId      String?   // null = global entry
-  type        String    // character, location, lore, item, subplot, theme
+  bookId      String?
+  type        String
   name        String
   description String    @default("")
-  aliases     String    @default("[]") // JSON array string
-  tags        String    @default("[]") // JSON array string
-  metadata    String    @default("{}") // JSON object string
-  color       String?   // hex color for visual organization
-  imagePath   String?   // path to uploaded character/location image
+  aliases     String    @default("[]")
+  tags        String    @default("[]")
+  metadata    String    @default("{}")
+  color       String?
+  imagePath   String?
   isPinned    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -111,11 +100,11 @@ model CodexEntry {
 
 model Snippet {
   id          String    @id @default(cuid())
-  bookId      String?   // null = global snippet
+  bookId      String?
   title       String
   content     String    @default("")
-  category    String    @default("general") // general, dialogue, description, action, research
-  tags        String    @default("[]") // JSON array string
+  category    String    @default("general")
+  tags        String    @default("[]")
   sortOrder   Int       @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -128,17 +117,17 @@ model Snippet {
 
 model ChatMessage {
   id          String    @id @default(cuid())
-  bookId      String?   // null = global chat
-  role        String    // user, assistant, system
+  bookId      String?
+  role        String
   content     String
   createdAt   DateTime  @default(now())
 }
 
 model AiConfig {
   id              String    @id @default(cuid())
-  provider        String    // openai, anthropic, openrouter, groq, cerebras, nararouter, google
-  apiKey          String    // stored as-is (encrypted in Supabase prod)
-  baseUrl         String?   // custom base URL for OpenAI-compatible providers
+  provider        String
+  apiKey          String
+  baseUrl         String?
   modelName       String?
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
@@ -149,10 +138,10 @@ model UploadedImage {
   id        String   @id @default(cuid())
   bookId    String?
   fileName  String
-  filePath  String   // local path on disk
+  filePath  String
   mimeType  String
   size      Int
-  purpose   String   // "cover", "codex", "inline"
+  purpose   String
   createdAt DateTime @default(now())
 }
 

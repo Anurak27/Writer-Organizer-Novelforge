@@ -48,7 +48,7 @@ export function AuthScreen() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Authentication failed');
+        setError(data.details || data.error || 'Authentication failed');
         setLoading(false);
         return;
       }

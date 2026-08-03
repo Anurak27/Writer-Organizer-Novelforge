@@ -6,7 +6,7 @@ import mammoth from 'mammoth';
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = verifyAuth(req);
+    const auth = await verifyAuth(req);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const formData = await req.formData();

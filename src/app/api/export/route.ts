@@ -10,7 +10,7 @@ import epubGen from 'epub-gen-memory';
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = verifyAuth(req);
+    const auth = await verifyAuth(req);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -48,7 +48,10 @@ export async function POST(req: NextRequest) {
     // Helper: resolve image path to buffer
     const getImageBuffer = async (imgPath: string): Promise<Buffer | null> => {
       if (!imgPath) return null;
-      const fullPath = join(process.cwd(), imgPath);
+      // On Vercel, uploaded files are in /tmp
+      const basePath = process.env.VERCEL ? '/tmp' : join(process.cwd(), 'public');
+      const cleanPath = imgPath.replace(/^\//, ''); // remove leading slash
+      const fullPath = join(basePath, cleanPath);
       if (!existsSync(fullPath)) return null;
       return readFile(fullPath);
     };
