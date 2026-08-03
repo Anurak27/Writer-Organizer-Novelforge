@@ -35,6 +35,7 @@ import {
   Eye,
   ImagePlus,
   X,
+  Database,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -158,6 +159,7 @@ export function Bookshelf() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [importMode, setImportMode] = useState<'ai' | 'raw'>('ai');
 
   // Export
   const [showExport, setShowExport] = useState(false);
@@ -374,7 +376,7 @@ export function Bookshelf() {
       const formData = new FormData();
       formData.append('file', importFile);
       formData.append('bookId', importBookId);
-      formData.append('mode', 'ai');
+      formData.append('mode', importMode);
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
@@ -408,6 +410,11 @@ export function Bookshelf() {
       });
       if (res.ok) {
         const blob = await res.blob();
+        if (blob.size === 0) {
+          alert('Export failed: empty file generated.');
+          setExporting(false);
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -417,8 +424,13 @@ export function Bookshelf() {
         a.click();
         URL.revokeObjectURL(url);
         setShowExport(false);
+      } else {
+        const errData = await res.json();
+        alert('Export error: ' + (errData.error || 'Unknown error'));
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      alert('Export failed: ' + (err instanceof Error ? err.message : 'Network error'));
+    }
     setExporting(false);
   };
 
@@ -439,7 +451,7 @@ export function Bookshelf() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setImportBookId(null); setImportFile(null); setImportResult(null); setShowImport(true); }}
+              onClick={() => { setImportBookId(null); setImportFile(null); setImportResult(null); setImportMode('ai'); setShowImport(true); }}
               className="text-zinc-400 hover:text-zinc-200"
             >
               <Upload className="w-4 h-4 mr-2" />
@@ -722,6 +734,7 @@ export function Bookshelf() {
                             setImportBookId(book.id);
                             setImportFile(null);
                             setImportResult(null);
+                            setImportMode('ai');
                             setShowImport(true);
                           }}
                         >
@@ -738,6 +751,19 @@ export function Bookshelf() {
                         >
                           <Download className="w-4 h-4 mr-2" />
                           Export Book
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-zinc-300 focus:text-zinc-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveBookId(book.id);
+                            useAppStore.getState().setAiPanelOpen(true);
+                            useAppStore.getState().setRightPanelTab('codex');
+                            setView('editor');
+                          }}
+                        >
+                          <Database className="w-4 h-4 mr-2" />
+                          View Codex
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-red-400 focus:text-red-300"
@@ -1006,7 +1032,7 @@ export function Bookshelf() {
             <DialogTitle className="text-zinc-100">Import Document</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <p className="text-sm text-zinc-400">Upload a .txt, .docx, or .pdf file. AI will parse it and fill your Codex and outline automatically.</p>
+            <p className="text-sm text-zinc-400">Upload a .txt, .docx, or .pdf file. Choose AI mode to auto-parse into chapters/scenes/codex, or Raw mode to import as plain text.</p>
             {!importBookId && books.length > 0 ? (
               <div className="space-y-1.5">
                 <label className="text-xs text-zinc-400">Select Book</label>
@@ -1027,7 +1053,7 @@ export function Bookshelf() {
                 type="file"
                 accept=".txt,.docx,.pdf"
                 className="hidden"
-                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                onChange={(e) => { setImportFile(e.target.files?.[0] || null); setImportResult(null); }}
               />
               <Upload className="w-8 h-8 text-zinc-500 mb-2" />
               <span className="text-sm text-zinc-400">
@@ -1038,15 +1064,25 @@ export function Bookshelf() {
             {importResult && (
               <p className={`text-sm ${importResult.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{importResult}</p>
             )}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setShowImport(false)} className="text-zinc-400">Cancel</Button>
-              <Button
-                onClick={handleImport}
-                disabled={!importBookId || !importFile || importing}
-                className="bg-amber-600 hover:bg-amber-500 text-white"
-              >
-                {importing ? 'Importing...' : 'Import with AI'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { setImportMode('raw'); handleImport(); }}
+                  disabled={!importBookId || !importFile || importing}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                >
+                  {importing && importMode === 'raw' ? 'Importing...' : 'Raw Import'}
+                </Button>
+                <Button
+                  onClick={() => { setImportMode('ai'); handleImport(); }}
+                  disabled={!importBookId || !importFile || importing}
+                  className="bg-amber-600 hover:bg-amber-500 text-white"
+                >
+                  {importing && importMode === 'ai' ? 'Importing...' : 'Import with AI'}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

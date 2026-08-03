@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   // Allow server-side external packages for Vercel
-  serverExternalPackages: ['pdfkit'],
+  serverExternalPackages: ['pdfkit', 'epub-gen-memory'],
 };
 
 export default nextConfig;

@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
       });
 
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`,
@@ -369,7 +369,7 @@ export async function POST(req: NextRequest) {
         })
       );
 
-      return new NextResponse(docBlob, {
+      return new NextResponse(new Uint8Array(docBlob), {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'Content-Disposition': `attachment; filename="${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.docx"`,
@@ -380,13 +380,12 @@ export async function POST(req: NextRequest) {
     if (format === 'epub') {
       try {
       const epubGenMod = await import('epub-gen-memory');
-      const epubGen = epubGenMod.default || epubGenMod;
       const content: any[] = [];
 
       // Title page
       content.push({
         title: book.title,
-        data: `<div style="text-align:center;margin-top:40%;"><h1>${book.title}</h1>${book.penName ? `<h3>by ${book.penName}</h3>` : ''}${book.genre ? `<p><em>${book.genre}</em></p>` : ''}</div>`,
+        data: `<div style=\"text-align:center;margin-top:40%;\"><h1>${book.title}</h1>${book.penName ? `<h3>by ${book.penName}</h3>` : ''}${book.genre ? `<p><em>${book.genre}</em></p>` : ''}</div>`,
       });
 
       if (wantManuscript) {
@@ -395,16 +394,10 @@ export async function POST(req: NextRequest) {
           if (ch.synopsis) html += `<p><em>${ch.synopsis}</em></p>`;
           for (const sc of ch.scenes) {
             if (ch.scenes.length > 1) html += `<h3>${sc.title}</h3>`;
-            // Convert newlines to paragraphs, preserve inline images
+            // Convert newlines to paragraphs
             const paragraphs = sc.content.split('\n').filter((p: string) => p.trim());
             for (const p of paragraphs) {
-              // Check if it's an image tag
-              const imgMatch = p.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-              if (imgMatch) {
-                html += `<p style="text-align:center;"><em>[Image: ${imgMatch[1]}]</em></p>`;
-              } else {
-                html += `<p>${p}</p>`;
-              }
+              html += `<p>${p}</p>`;
             }
           }
           content.push({ title: ch.title, data: html });
@@ -427,13 +420,20 @@ export async function POST(req: NextRequest) {
         content.push({ title: 'Codex', data: html });
       }
 
-      const epubBuffer = await epubGen.default({
-        title: book.title,
-        author: book.penName || 'Unknown',
-        content,
-      });
+      // Use the default export function from epub-gen-memory
+      const epubGen = epubGenMod.default;
+      if (typeof epubGen !== 'function') {
+        throw new Error('epub-gen-memory module did not export a function');
+      }
+      const epubBuffer = await epubGen(
+        {
+          title: book.title,
+          author: book.penName || 'Unknown',
+        },
+        content
+      );
 
-      return new NextResponse(epubBuffer, {
+      return new NextResponse(new Uint8Array(epubBuffer), {
         headers: {
           'Content-Type': 'application/epub+zip',
           'Content-Disposition': `attachment; filename="${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.epub"`,
@@ -441,7 +441,7 @@ export async function POST(req: NextRequest) {
       });
       } catch (err) {
         console.error('EPUB export error:', err);
-        return NextResponse.json({ error: 'EPUB export failed: ' + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
+        return NextResponse.json({ error: 'EPUB export failed: ' + (err instanceof Error ? err.message : String(err)) + '. Try PDF or DOCX format instead.' }, { status: 500 });
       }
     }
 
