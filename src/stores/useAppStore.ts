@@ -185,7 +185,7 @@ const initialState = {
   codexEntries: [],
   snippets: [],
   chatMessages: [],
-  aiPanelOpen: false,
+  aiPanelOpen: true,
   aiGeneratedText: null,
   aiLoading: false,
   sidebarOpen: true,

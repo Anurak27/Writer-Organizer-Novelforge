@@ -163,6 +163,7 @@ export function Bookshelf() {
   const [showExport, setShowExport] = useState(false);
   const [exportBookId, setExportBookId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportSections, setExportSections] = useState('manuscript');
 
   // Cached book metadata for cards (wordCountGoal, seriesId)
   const [bookMeta, setBookMeta] = useState<Record<string, BookMeta>>({});
@@ -216,6 +217,7 @@ export function Bookshelf() {
           pov: newPov,
           wordCountGoal: newWordCountGoal ? parseInt(newWordCountGoal, 10) : null,
           language: newLanguage,
+          coverImagePath: newCoverPath || null,
         }),
       });
       if (res.ok) {
@@ -518,6 +520,45 @@ export function Bookshelf() {
 
                 {showAdvanced && (
                   <div className="space-y-4 pl-0">
+                    {/* Cover Upload */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-zinc-400">Cover Image</label>
+                      <div className="flex items-center gap-3">
+                        {newCoverPath ? (
+                          <div className="relative w-16 h-22 rounded overflow-hidden border border-zinc-700 shrink-0">
+                            <img src={newCoverPath} alt="Cover" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setNewCoverPath('')}
+                              className="absolute top-0.5 right-0.5 w-5 h-5 bg-zinc-900/80 rounded-full flex items-center justify-center"
+                            >
+                              <X className="w-3 h-3 text-zinc-400" />
+                            </button>
+                          </div>
+                        ) : null}
+                        <label className="flex-1 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadCover(f, 'create');
+                            }}
+                          />
+                          <div className={`${inputCls} flex items-center justify-center h-10 border border-dashed border-zinc-700 rounded-md hover:border-zinc-500 transition-colors`}>
+                            {uploadingCover ? (
+                              <span className="text-xs text-zinc-500">Uploading...</span>
+                            ) : (
+                              <>
+                                <ImagePlus className="w-4 h-4 text-zinc-500 mr-2" />
+                                <span className="text-xs text-zinc-500">Choose cover image</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    </div>
                     <Textarea
                       placeholder="Description / Synopsis (optional)"
                       value={newDescription}
@@ -1036,7 +1077,7 @@ export function Bookshelf() {
 
             <div className="space-y-1.5">
               <label className="text-xs text-zinc-400">Content</label>
-              <Select defaultValue="manuscript" onValueChange={() => {}}>
+              <Select defaultValue="manuscript" onValueChange={setExportSections}>
                 <SelectTrigger className={`w-full ${inputCls}`}>
                   <SelectValue />
                 </SelectTrigger>
@@ -1057,7 +1098,7 @@ export function Bookshelf() {
                     key={fmt}
                     variant="outline"
                     disabled={!exportBookId || exporting}
-                    onClick={() => handleExport(fmt, 'manuscript')}
+                    onClick={() => handleExport(fmt, exportSections)}
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
                   >
                     {exporting ? 'Exporting...' : label}

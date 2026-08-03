@@ -4,9 +4,7 @@ import { verifyAuth } from '@/lib/auth';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } from 'docx';
-import epubGen from 'epub-gen-memory';
 
 export async function POST(req: NextRequest) {
   try {
@@ -134,6 +132,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (format === 'pdf') {
+      try {
+      const PDFDocument = (await import('pdfkit')).default;
       const doc = new PDFDocument({
         size: 'LETTER',
         margins: { top: 72, bottom: 72, left: 72, right: 72 },
@@ -232,6 +232,10 @@ export async function POST(req: NextRequest) {
           'Content-Disposition': `attachment; filename="${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`,
         },
       });
+      } catch (err) {
+        console.error('PDF export error:', err);
+        return NextResponse.json({ error: 'PDF export failed: ' + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
+      }
     }
 
     if (format === 'docx') {
@@ -374,6 +378,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (format === 'epub') {
+      try {
+      const epubGenMod = await import('epub-gen-memory');
+      const epubGen = epubGenMod.default || epubGenMod;
       const content: any[] = [];
 
       // Title page
@@ -432,11 +439,15 @@ export async function POST(req: NextRequest) {
           'Content-Disposition': `attachment; filename="${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.epub"`,
         },
       });
+      } catch (err) {
+        console.error('EPUB export error:', err);
+        return NextResponse.json({ error: 'EPUB export failed: ' + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ error: 'Unsupported format' }, { status: 400 });
   } catch (err) {
     console.error('Export error:', err);
-    return NextResponse.json({ error: 'Export failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Export failed: ' + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
   }
 }

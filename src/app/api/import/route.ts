@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
-import { readFile } from 'fs/promises';
-import mammoth from 'mammoth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,19 +10,17 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const bookId = formData.get('bookId') as string;
-    const importMode = (formData.get('mode') as string) || 'ai'; // 'ai' or 'raw'
+    const importMode = (formData.get('mode') as string) || 'ai';
 
     if (!file || !bookId) {
       return NextResponse.json({ error: 'Missing file or bookId' }, { status: 400 });
     }
 
-    const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-    ];
-    if (!allowedTypes.includes(file.type) && !file.name.endsWith('.txt')) {
-      return NextResponse.json({ error: 'Unsupported file type. Use .pdf, .docx, or .txt' }, { status: 400 });
+    // Validate file type
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const allowedExts = ['txt', 'docx', 'pdf'];
+    if (!ext || !allowedExts.includes(ext)) {
+      return NextResponse.json({ error: 'Unsupported file type. Use .txt, .docx, or .pdf' }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
@@ -33,19 +29,24 @@ export async function POST(req: NextRequest) {
     // Step 1: Extract text from file
     let extractedText = '';
 
-    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+    if (ext === 'txt') {
       extractedText = buffer.toString('utf-8');
-    } else if (file.name.endsWith('.docx')) {
-      const result = await mammoth.extractRawText({ buffer });
-      extractedText = result.value;
-    } else if (file.type === 'application/pdf') {
-      // For PDF, extract text (basic approach - no external PDF text parser needed)
-      // We'll use a simple text extraction or pass raw to AI
-      extractedText = `[PDF content extracted - ${buffer.length} bytes]`;
-      // Try to extract readable text strings from the PDF buffer
+    } else if (ext === 'docx') {
+      try {
+        const mammoth = await import('mammoth');
+        const result = await mammoth.extractRawText({ buffer });
+        extractedText = result.value;
+      } catch (err) {
+        console.error('DOCX parse error:', err);
+        return NextResponse.json({ 
+          error: 'Failed to parse DOCX file. Try saving it as .txt and importing again.',
+          details: err instanceof Error ? err.message : String(err)
+        }, { status: 400 });
+      }
+    } else if (ext === 'pdf') {
+      // Basic PDF text extraction
       const textParts: string[] = [];
       const str = buffer.toString('latin1');
-      // Extract text between BT and ET markers (basic PDF text extraction)
       const btRegex = /\(([^)]+)\)/g;
       let match;
       while ((match = btRegex.exec(str)) !== null) {
@@ -54,25 +55,31 @@ export async function POST(req: NextRequest) {
           textParts.push(text);
         }
       }
-      if (textParts.length > 10) {
-        extractedText = textParts.join(' ');
+      extractedText = textParts.length > 10 ? textParts.join(' ') : '';
+      if (!extractedText) {
+        return NextResponse.json({ 
+          error: 'Could not extract text from PDF. PDF parsing is limited. Try exporting the PDF as .txt or .docx first and import that instead.' 
+        }, { status: 400 });
       }
     }
 
     if (!extractedText.trim()) {
-      return NextResponse.json({ error: 'Could not extract text from file' }, { status: 400 });
+      return NextResponse.json({ error: 'Could not extract any text from the file. The file may be empty or corrupted.' }, { status: 400 });
     }
 
-    // Step 2: Use AI to parse the document and create structured data
+    // Step 2: AI import mode
     if (importMode === 'ai') {
-      // Get active AI config
       const aiConfig = await db.aiConfig.findFirst({ where: { isActive: true } });
       if (!aiConfig) {
-        return NextResponse.json({ error: 'No AI provider configured. Set one up in Settings first.' }, { status: 400 });
+        return NextResponse.json({ 
+          error: 'No AI provider configured. Go to Settings to add an AI provider first, or use "Raw Import" mode to import text directly.',
+          hint: 'raw_mode'
+        }, { status: 400 });
       }
 
-      // Build the AI prompt
-      const systemPrompt = `You are a creative writing assistant. Analyze the following document and extract structured information for a novel writing app.
+      try {
+        const { callAIForImport } = await import('@/lib/ai-import');
+        const systemPrompt = `You are a creative writing assistant. Analyze the following document and extract structured information for a novel writing app.
 
 Return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
 {
@@ -101,77 +108,87 @@ Rules:
 - If the document is just a list/outline (not prose), put everything in "outline" and leave "manuscript" empty
 - If it's pure prose with no structure, create a single chapter with the full text`;
 
-      const { callAIForImport } = await import('@/lib/ai-import');
-      const aiResult = await callAIForImport(aiConfig, systemPrompt, extractedText);
+        const aiResult = await callAIForImport(aiConfig, systemPrompt, extractedText);
 
-      if (!aiResult) {
-        return NextResponse.json({ error: 'AI failed to parse the document. Try again or use raw import.' }, { status: 500 });
-      }
-
-      // Step 3: Create database records from AI result
-      const created = { codex: 0, chapters: 0, scenes: 0 };
-
-      // Create codex entries
-      if (aiResult.codex && Array.isArray(aiResult.codex)) {
-        for (const entry of aiResult.codex) {
-          if (entry.name && entry.type) {
-            await db.codexEntry.create({
-              data: {
-                bookId,
-                type: entry.type,
-                name: entry.name.slice(0, 200),
-                description: (entry.description || '').slice(0, 5000),
-                aliases: '[]',
-                tags: '[]',
-                metadata: '{}',
-              },
-            });
-            created.codex++;
-          }
+        if (!aiResult) {
+          return NextResponse.json({ error: 'AI could not parse the document. The AI response was not valid JSON. Try again with a shorter document, or use Raw Import mode.' }, { status: 500 });
         }
-      }
 
-      // Create outline / manuscript chapters
-      const chapters = aiResult.manuscript?.length ? aiResult.manuscript : aiResult.outline;
-      if (chapters && Array.isArray(chapters)) {
-        for (let i = 0; i < chapters.length; i++) {
-          const ch = chapters[i];
-          const chapter = await db.chapter.create({
-            data: {
-              bookId,
-              title: (ch.chapterTitle || `Chapter ${i + 1}`).slice(0, 200),
-              synopsis: (ch.synopsis || '').slice(0, 2000) || null,
-              sortOrder: i,
-            },
-          });
-          created.chapters++;
+        // Create database records
+        const created = { codex: 0, chapters: 0, scenes: 0 };
 
-          // Create scenes if manuscript data
-          if (ch.scenes && Array.isArray(ch.scenes)) {
-            for (let j = 0; j < ch.scenes.length; j++) {
-              const sc = ch.scenes[j];
-              const content = typeof sc.content === 'string' ? sc.content : JSON.stringify(sc.content);
-              const wordCount = content.split(/\s+/).filter(Boolean).length;
-              await db.scene.create({
-                data: {
-                  chapterId: chapter.id,
-                  title: (sc.title || `Scene ${j + 1}`).slice(0, 200),
-                  content,
-                  wordCount,
-                  sortOrder: j,
-                },
-              });
-              created.scenes++;
+        if (aiResult.codex && Array.isArray(aiResult.codex)) {
+          for (const entry of aiResult.codex) {
+            if (entry.name && entry.type) {
+              try {
+                await db.codexEntry.create({
+                  data: {
+                    bookId,
+                    type: entry.type,
+                    name: entry.name.slice(0, 200),
+                    description: (entry.description || '').slice(0, 5000),
+                    aliases: '[]',
+                    tags: '[]',
+                    metadata: '{}',
+                  },
+                });
+                created.codex++;
+              } catch (err) {
+                console.error('Failed to create codex entry:', entry.name, err);
+              }
             }
           }
         }
-      }
 
-      return NextResponse.json({
-        success: true,
-        message: `Imported: ${created.codex} codex entries, ${created.chapters} chapters, ${created.scenes} scenes`,
-        created,
-      });
+        const chapters = aiResult.manuscript?.length ? aiResult.manuscript : aiResult.outline;
+        if (chapters && Array.isArray(chapters)) {
+          for (let i = 0; i < chapters.length; i++) {
+            const ch = chapters[i];
+            try {
+              const chapter = await db.chapter.create({
+                data: {
+                  bookId,
+                  title: (ch.chapterTitle || `Chapter ${i + 1}`).slice(0, 200),
+                  synopsis: (ch.synopsis || '').slice(0, 2000) || null,
+                  sortOrder: i,
+                },
+              });
+              created.chapters++;
+
+              if (ch.scenes && Array.isArray(ch.scenes)) {
+                for (let j = 0; j < ch.scenes.length; j++) {
+                  const sc = ch.scenes[j];
+                  const content = typeof sc.content === 'string' ? sc.content : JSON.stringify(sc.content);
+                  const wordCount = content.split(/\s+/).filter(Boolean).length;
+                  await db.scene.create({
+                    data: {
+                      chapterId: chapter.id,
+                      title: (sc.title || `Scene ${j + 1}`).slice(0, 200),
+                      content,
+                      wordCount,
+                      sortOrder: j,
+                    },
+                  });
+                  created.scenes++;
+                }
+              }
+            } catch (err) {
+              console.error('Failed to create chapter/scene:', err);
+            }
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: `Imported: ${created.codex} codex entries, ${created.chapters} chapters, ${created.scenes} scenes`,
+          created,
+        });
+      } catch (err) {
+        console.error('AI import error:', err);
+        return NextResponse.json({ 
+          error: 'AI import failed: ' + (err instanceof Error ? err.message : String(err)) + '. Try Raw Import mode instead.'
+        }, { status: 500 });
+      }
     }
 
     // Raw mode: import as a single chapter
