@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft, Star, Zap } from 'lucide-react';
+import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft, Star, Zap, Shield } from 'lucide-react';
 
 const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: string; needsBaseUrl: boolean }> = {
   openrouter:  { label: 'OpenRouter',      defaultModel: 'openai/gpt-4o-mini',                  hint: 'openrouter.ai/keys',                   needsBaseUrl: false },
@@ -35,6 +35,13 @@ export function SettingsScreen() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [activating, setActivating] = useState<string | null>(null);
+
+  // Change password
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [changingPw, setChangingPw] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
 
   const token = useAppStore((s) => s.token);
   const setToken = useAppStore((s) => s.setToken);
@@ -170,6 +177,41 @@ export function SettingsScreen() {
       // silent
     } finally {
       setActivating(null);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPw !== confirmPw) {
+      setPwMsg('Error: New passwords do not match.');
+      return;
+    }
+    if (newPw.length < 4) {
+      setPwMsg('Error: New password must be at least 4 characters.');
+      return;
+    }
+    setChangingPw(true);
+    setPwMsg('');
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_password', password: currentPw, currentPassword: currentPw, newPassword: newPw }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPwMsg(data.message || 'Password changed successfully.');
+        setCurrentPw('');
+        setNewPw('');
+        setConfirmPw('');
+        // Update token if server returned a new one
+        if (data.token) setToken(data.token);
+      } else {
+        setPwMsg('Error: ' + (data.error || 'Failed to change password.'));
+      }
+    } catch {
+      setPwMsg('Error: Network error.');
+    } finally {
+      setChangingPw(false);
     }
   };
 
@@ -356,6 +398,64 @@ export function SettingsScreen() {
                   Save {PROVIDERS[provider]?.label || provider} Key
                 </>
               )}
+            </Button>
+          </div>
+        </section>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* Change Password */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-zinc-100">Change Password</h2>
+          </div>
+          <p className="text-sm text-zinc-500 mb-4">
+            Update your master password. You will need to enter your current password to confirm the change.
+          </p>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 space-y-4">
+            <div>
+              <label className="text-sm font-medium text-zinc-300 mb-1.5 block">Current Password</label>
+              <Input
+                type="password"
+                placeholder="Enter current password"
+                value={currentPw}
+                onChange={(e) => { setCurrentPw(e.target.value); setPwMsg(''); }}
+                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-300 mb-1.5 block">New Password</label>
+              <Input
+                type="password"
+                placeholder="Enter new password (min 4 chars)"
+                value={newPw}
+                onChange={(e) => { setNewPw(e.target.value); setPwMsg(''); }}
+                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-300 mb-1.5 block">Confirm New Password</label>
+              <Input
+                type="password"
+                placeholder="Repeat new password"
+                value={confirmPw}
+                onChange={(e) => { setConfirmPw(e.target.value); setPwMsg(''); }}
+                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600"
+              />
+            </div>
+            {pwMsg && (
+              <div className={`flex items-center gap-2 text-sm ${pwMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>
+                {pwMsg.startsWith('Error') ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                {pwMsg}
+              </div>
+            )}
+            <Button
+              onClick={handleChangePassword}
+              disabled={changingPw || !currentPw || !newPw || !confirmPw}
+              className="bg-amber-600 hover:bg-amber-500 text-white"
+            >
+              {changingPw ? 'Changing...' : 'Update Password'}
             </Button>
           </div>
         </section>
