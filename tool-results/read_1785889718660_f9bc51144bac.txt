@@ -1,0 +1,1152 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback } from 'react';
+     4→     4→import { useAppStore, BookSummary, BookDetail } from '@/stores/useAppStore';
+     5→     5→import { Button } from '@/components/ui/button';
+     6→     6→import { Input } from '@/components/ui/input';
+     7→     7→import { Textarea } from '@/components/ui/textarea';
+     8→     8→import { Badge } from '@/components/ui/badge';
+     9→     9→import {
+    10→    10→  Select,
+    11→    11→  SelectContent,
+    12→    12→  SelectItem,
+    13→    13→  SelectTrigger,
+    14→    14→  SelectValue,
+    15→    15→} from '@/components/ui/select';
+    16→    16→import {
+    17→    17→  Dialog,
+    18→    18→  DialogContent,
+    19→    19→  DialogHeader,
+    20→    20→  DialogTitle,
+    21→    21→  DialogTrigger,
+    22→    22→} from '@/components/ui/dialog';
+    23→    23→import {
+    24→    24→  Plus,
+    25→    25→  BookOpen,
+    26→    26→  FileText,
+    27→    27→  Settings,
+    28→    28→  Trash2,
+    29→    29→  PenLine,
+    30→    30→  MoreVertical,
+    31→    31→  Pencil,
+    32→    32→  Bookmark,
+    33→    33→  Upload,
+    34→    34→  Download,
+    35→    35→  Eye,
+    36→    36→  ImagePlus,
+    37→    37→  X,
+    38→    38→  Database,
+    39→    39→} from 'lucide-react';
+    40→    40→import {
+    41→    41→  DropdownMenu,
+    42→    42→  DropdownMenuContent,
+    43→    43→  DropdownMenuItem,
+    44→    44→  DropdownMenuTrigger,
+    45→    45→} from '@/components/ui/dropdown-menu';
+    46→    46→
+    47→    47→const STATUS_COLORS: Record<string, string> = {
+    48→    48→  draft: 'bg-zinc-700 text-zinc-300',
+    49→    49→  in_progress: 'bg-amber-600/20 text-amber-400 border border-amber-600/30',
+    50→    50→  completed: 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30',
+    51→    51→  on_hiatus: 'bg-zinc-600/30 text-zinc-400',
+    52→    52→};
+    53→    53→
+    54→    54→const STATUS_LABELS: Record<string, string> = {
+    55→    55→  draft: 'Draft',
+    56→    56→  in_progress: 'In Progress',
+    57→    57→  completed: 'Completed',
+    58→    58→  on_hiatus: 'On Hiatus',
+    59→    59→};
+    60→    60→
+    61→    61→const POV_OPTIONS: { value: string; label: string }[] = [
+    62→    62→  { value: 'third_past', label: 'Third Person, Past Tense' },
+    63→    63→  { value: 'third_present', label: 'Third Person, Present Tense' },
+    64→    64→  { value: 'first_past', label: 'First Person, Past Tense' },
+    65→    65→  { value: 'first_present', label: 'First Person, Present Tense' },
+    66→    66→  { value: 'third_omniscient', label: 'Third Person Omniscient' },
+    67→    67→  { value: 'second_past', label: 'Second Person, Past Tense' },
+    68→    68→  { value: 'second_present', label: 'Second Person, Present Tense' },
+    69→    69→];
+    70→    70→
+    71→    71→const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+    72→    72→  { value: 'en', label: 'English' },
+    73→    73→  { value: 'es', label: 'Spanish' },
+    74→    74→  { value: 'fr', label: 'French' },
+    75→    75→  { value: 'de', label: 'German' },
+    76→    76→  { value: 'pt', label: 'Portuguese' },
+    77→    77→  { value: 'it', label: 'Italian' },
+    78→    78→  { value: 'ja', label: 'Japanese' },
+    79→    79→  { value: 'zh', label: 'Chinese' },
+    80→    80→];
+    81→    81→
+    82→    82→interface BookMeta {
+    83→    83→  wordCountGoal: number | null;
+    84→    84→  seriesId: string | null;
+    85→    85→  coverImagePath: string | null;
+    86→    86→}
+    87→    87→
+    88→    88→const PROSE_STYLES = [
+    89→    89→  { value: 'literary', label: 'Literary' },
+    90→    90→  { value: 'minimalist', label: 'Minimalist' },
+    91→    91→  { value: 'flowery', label: 'Flowery / Descriptive' },
+    92→    92→  { value: 'pulp', label: 'Pulp / Fast-paced' },
+    93→    93→  { value: 'formal', label: 'Formal / Academic' },
+    94→    94→  { value: 'conversational', label: 'Conversational' },
+    95→    95→];
+    96→    96→
+    97→    97→const TONE_OPTIONS = [
+    98→    98→  { value: 'dark', label: 'Dark / Grim' },
+    99→    99→  { value: 'humorous', label: 'Humorous / Light' },
+   100→   100→  { value: 'romantic', label: 'Romantic' },
+   101→   101→  { value: 'suspenseful', label: 'Suspenseful' },
+   102→   102→  { value: 'melancholic', label: 'Melancholic' },
+   103→   103→  { value: 'whimsical', label: 'Whimsical' },
+   104→   104→];
+   105→   105→
+   106→   106→function formatWordCount(words: number): string {
+   107→   107→  if (words >= 1000) return `${(words / 1000).toFixed(1)}k`;
+   108→   108→  return String(words);
+   109→   109→}
+   110→   110→
+   111→   111→export function Bookshelf() {
+   112→   112→  const [books, setBooks] = useState<BookSummary[]>([]);
+   113→   113→  const [loading, setLoading] = useState(true);
+   114→   114→  const [showCreate, setShowCreate] = useState(false);
+   115→   115→  const [newTitle, setNewTitle] = useState('');
+   116→   116→  const [newGenre, setNewGenre] = useState('');
+   117→   117→  const [creating, setCreating] = useState(false);
+   118→   118→
+   119→   119→  // Advanced create fields
+   120→   120→  const [showAdvanced, setShowAdvanced] = useState(false);
+   121→   121→  const [newDescription, setNewDescription] = useState('');
+   122→   122→  const [newPenName, setNewPenName] = useState('');
+   123→   123→  const [newPov, setNewPov] = useState('third_past');
+   124→   124→  const [newWordCountGoal, setNewWordCountGoal] = useState('');
+   125→   125→  const [newLanguage, setNewLanguage] = useState('en');
+   126→   126→
+   127→   127→  // Edit dialog
+   128→   128→  const [showEdit, setShowEdit] = useState(false);
+   129→   129→  const [editBookId, setEditBookId] = useState<string | null>(null);
+   130→   130→  const [editTitle, setEditTitle] = useState('');
+   131→   131→  const [editGenre, setEditGenre] = useState('');
+   132→   132→  const [editDescription, setEditDescription] = useState('');
+   133→   133→  const [editPenName, setEditPenName] = useState('');
+   134→   134→  const [editPov, setEditPov] = useState('third_past');
+   135→   135→  const [editWordCountGoal, setEditWordCountGoal] = useState('');
+   136→   136→  const [editLanguage, setEditLanguage] = useState('en');
+   137→   137→  const [editShowAdvanced, setEditShowAdvanced] = useState(false);
+   138→   138→  const [editLoading, setEditLoading] = useState(false);
+   139→   139→  const [editSaving, setEditSaving] = useState(false);
+   140→   140→
+   141→   141→  // Style & Prose (create)
+   142→   142→  const [newProseStyle, setNewProseStyle] = useState('');
+   143→   143→  const [newTone, setNewTone] = useState('');
+   144→   144→  const [newCustomPrompt, setNewCustomPrompt] = useState('');
+   145→   145→
+   146→   146→  // Style & Prose (edit)
+   147→   147→  const [editProseStyle, setEditProseStyle] = useState('');
+   148→   148→  const [editTone, setEditTone] = useState('');
+   149→   149→  const [editCustomPrompt, setEditCustomPrompt] = useState('');
+   150→   150→
+   151→   151→  // Cover upload
+   152→   152→  const [newCoverPath, setNewCoverPath] = useState('');
+   153→   153→  const [editCoverPath, setEditCoverPath] = useState('');
+   154→   154→  const [uploadingCover, setUploadingCover] = useState(false);
+   155→   155→
+   156→   156→  // Import
+   157→   157→  const [showImport, setShowImport] = useState(false);
+   158→   158→  const [importBookId, setImportBookId] = useState<string | null>(null);
+   159→   159→  const [importFile, setImportFile] = useState<File | null>(null);
+   160→   160→  const [importing, setImporting] = useState(false);
+   161→   161→  const [importResult, setImportResult] = useState<string | null>(null);
+   162→   162→  const [importMode, setImportMode] = useState<'ai' | 'raw'>('ai');
+   163→   163→
+   164→   164→  // Export
+   165→   165→  const [showExport, setShowExport] = useState(false);
+   166→   166→  const [exportBookId, setExportBookId] = useState<string | null>(null);
+   167→   167→  const [exporting, setExporting] = useState(false);
+   168→   168→  const [exportSections, setExportSections] = useState('manuscript');
+   169→   169→
+   170→   170→  // Cached book metadata for cards (wordCountGoal, seriesId)
+   171→   171→  const [bookMeta, setBookMeta] = useState<Record<string, BookMeta>>({});
+   172→   172→
+   173→   173→  const setView = useAppStore((s) => s.setView);
+   174→   174→  const setActiveBookId = useAppStore((s) => s.setActiveBookId);
+   175→   175→
+   176→   176→  const fetchBooks = useCallback(async () => {
+   177→   177→    try {
+   178→   178→      const res = await fetch('/api/books', {
+   179→   179→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   180→   180→      });
+   181→   181→      if (res.ok) setBooks(await res.json());
+   182→   182→    } catch {
+   183→   183→      // silent fail
+   184→   184→    } finally {
+   185→   185→      setLoading(false);
+   186→   186→    }
+   187→   187→  }, []);
+   188→   188→
+   189→   189→  useEffect(() => {
+   190→   190→    fetchBooks();
+   191→   191→  }, [fetchBooks]);
+   192→   192→
+   193→   193→  const resetCreateForm = useCallback(() => {
+   194→   194→    setNewTitle('');
+   195→   195→    setNewGenre('');
+   196→   196→    setNewDescription('');
+   197→   197→    setNewPenName('');
+   198→   198→    setNewPov('third_past');
+   199→   199→    setNewWordCountGoal('');
+   200→   200→    setNewLanguage('en');
+   201→   201→    setShowAdvanced(false);
+   202→   202→  }, []);
+   203→   203→
+   204→   204→  const handleCreate = async () => {
+   205→   205→    if (!newTitle.trim()) return;
+   206→   206→    setCreating(true);
+   207→   207→    try {
+   208→   208→      const res = await fetch('/api/books', {
+   209→   209→        method: 'POST',
+   210→   210→        headers: {
+   211→   211→          'Content-Type': 'application/json',
+   212→   212→          Authorization: `Bearer ${useAppStore.getState().token}`,
+   213→   213→        },
+   214→   214→        body: JSON.stringify({
+   215→   215→          title: newTitle,
+   216→   216→          genre: newGenre.trim() || null,
+   217→   217→          description: newDescription.trim() || null,
+   218→   218→          penName: newPenName.trim() || null,
+   219→   219→          pov: newPov,
+   220→   220→          wordCountGoal: newWordCountGoal ? parseInt(newWordCountGoal, 10) : null,
+   221→   221→          language: newLanguage,
+   222→   222→          coverImagePath: newCoverPath || null,
+   223→   223→        }),
+   224→   224→      });
+   225→   225→      if (res.ok) {
+   226→   226→        resetCreateForm();
+   227→   227→        setShowCreate(false);
+   228→   228→        fetchBooks();
+   229→   229→      }
+   230→   230→    } catch {
+   231→   231→      // silent fail
+   232→   232→    } finally {
+   233→   233→      setCreating(false);
+   234→   234→    }
+   235→   235→  };
+   236→   236→
+   237→   237→  const handleDelete = async (id: string) => {
+   238→   238→    if (!confirm('Delete this book and all its chapters and scenes?')) return;
+   239→   239→    try {
+   240→   240→      await fetch(`/api/books/${id}`, {
+   241→   241→        method: 'DELETE',
+   242→   242→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   243→   243→      });
+   244→   244→      fetchBooks();
+   245→   245→    } catch {
+   246→   246→      // silent fail
+   247→   247→    }
+   248→   248→  };
+   249→   249→
+   250→   250→  const fetchBookDetail = async (id: string): Promise<BookDetail | null> => {
+   251→   251→    try {
+   252→   252→      const res = await fetch(`/api/books/${id}`, {
+   253→   253→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   254→   254→      });
+   255→   255→      if (res.ok) {
+   256→   256→        const detail: BookDetail = await res.json();
+   257→   257→        // Cache the metadata for card display
+   258→   258→        setBookMeta((prev) => ({
+   259→   259→          ...prev,
+   260→   260→          [id]: {
+   261→   261→            wordCountGoal: detail.wordCountGoal,
+   262→   262→            seriesId: detail.seriesId,
+   263→   263→            coverImagePath: detail.coverImagePath,
+   264→   264→          },
+   265→   265→        }));
+   266→   266→        return detail;
+   267→   267→      }
+   268→   268→    } catch {
+   269→   269→      // silent fail
+   270→   270→    }
+   271→   271→    return null;
+   272→   272→  };
+   273→   273→
+   274→   274→  const openEditDialog = async (id: string, e: React.MouseEvent) => {
+   275→   275→    e.stopPropagation();
+   276→   276→    setEditBookId(id);
+   277→   277→    setShowEdit(true);
+   278→   278→    setEditLoading(true);
+   279→   279→    setEditShowAdvanced(false);
+   280→   280→
+   281→   281→    const detail = await fetchBookDetail(id);
+   282→   282→    if (detail) {
+   283→   283→      setEditTitle(detail.title);
+   284→   284→      setEditGenre(detail.genre || '');
+   285→   285→      setEditDescription(detail.description || '');
+   286→   286→      setEditPenName(detail.penName || '');
+   287→   287→      setEditPov(detail.pov || 'third_past');
+   288→   288→      setEditWordCountGoal(detail.wordCountGoal ? String(detail.wordCountGoal) : '');
+   289→   289→      setEditLanguage(detail.language || 'en');
+   290→   290→      setEditProseStyle(detail.proseStyle || '');
+   291→   291→      setEditTone(detail.tone || '');
+   292→   292→      setEditCustomPrompt(detail.customPrompt || '');
+   293→   293→      setEditCoverPath(detail.coverImagePath || '');
+   294→   294→    }
+   295→   295→    setEditLoading(false);
+   296→   296→  };
+   297→   297→
+   298→   298→  const handleEditSave = async () => {
+   299→   299→    if (!editBookId || !editTitle.trim()) return;
+   300→   300→    setEditSaving(true);
+   301→   301→    try {
+   302→   302→      const res = await fetch(`/api/books/${editBookId}`, {
+   303→   303→        method: 'PUT',
+   304→   304→        headers: {
+   305→   305→          'Content-Type': 'application/json',
+   306→   306→          Authorization: `Bearer ${useAppStore.getState().token}`,
+   307→   307→        },
+   308→   308→        body: JSON.stringify({
+   309→   309→          title: editTitle,
+   310→   310→          genre: editGenre.trim() || null,
+   311→   311→          description: editDescription.trim() || null,
+   312→   312→          penName: editPenName.trim() || null,
+   313→   313→          pov: editPov,
+   314→   314→          wordCountGoal: editWordCountGoal ? parseInt(editWordCountGoal, 10) : null,
+   315→   315→          language: editLanguage,
+   316→   316→          proseStyle: editProseStyle || null,
+   317→   317→          tone: editTone || null,
+   318→   318→          customPrompt: editCustomPrompt.trim() || null,
+   319→   319→          coverImagePath: editCoverPath || null,
+   320→   320→        }),
+   321→   321→      });
+   322→   322→      if (res.ok) {
+   323→   323→        setShowEdit(false);
+   324→   324→        setEditBookId(null);
+   325→   325→        // Update the cached meta
+   326→   326→        setBookMeta((prev) => ({
+   327→   327→          ...prev,
+   328→   328→          [editBookId]: {
+   329→   329→            wordCountGoal: editWordCountGoal ? parseInt(editWordCountGoal, 10) : null,
+   330→   330→            seriesId: prev[editBookId]?.seriesId ?? null,
+   331→   331→          },
+   332→   332→        }));
+   333→   333→        fetchBooks();
+   334→   334→      }
+   335→   335→    } catch {
+   336→   336→      // silent fail
+   337→   337→    } finally {
+   338→   338→      setEditSaving(false);
+   339→   339→    }
+   340→   340→  };
+   341→   341→
+   342→   342→  const openBook = (id: string) => {
+   343→   343→    setActiveBookId(id);
+   344→   344→    setView('editor');
+   345→   345→  };
+   346→   346→
+   347→   347→  // Upload cover image
+   348→   348→  const uploadCover = async (file: File, mode: 'create' | 'edit') => {
+   349→   349→    setUploadingCover(true);
+   350→   350→    try {
+   351→   351→      const formData = new FormData();
+   352→   352→      formData.append('file', file);
+   353→   353→      formData.append('purpose', 'cover');
+   354→   354→      const bookId = mode === 'edit' ? editBookId : null;
+   355→   355→      if (bookId) formData.append('bookId', bookId);
+   356→   356→      const res = await fetch('/api/upload', {
+   357→   357→        method: 'POST',
+   358→   358→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   359→   359→        body: formData,
+   360→   360→      });
+   361→   361→      if (res.ok) {
+   362→   362→        const data = await res.json();
+   363→   363→        if (mode === 'create') setNewCoverPath(data.url);
+   364→   364→        else setEditCoverPath(data.url);
+   365→   365→      }
+   366→   366→    } catch { /* ignore */ }
+   367→   367→    setUploadingCover(false);
+   368→   368→  };
+   369→   369→
+   370→   370→  // Handle import
+   371→   371→  const handleImport = async () => {
+   372→   372→    if (!importBookId || !importFile) return;
+   373→   373→    setImporting(true);
+   374→   374→    setImportResult(null);
+   375→   375→    try {
+   376→   376→      const formData = new FormData();
+   377→   377→      formData.append('file', importFile);
+   378→   378→      formData.append('bookId', importBookId);
+   379→   379→      formData.append('mode', importMode);
+   380→   380→      const res = await fetch('/api/import', {
+   381→   381→        method: 'POST',
+   382→   382→        headers: { Authorization: `Bearer ${useAppStore.getState().token}` },
+   383→   383→        body: formData,
+   384→   384→      });
+   385→   385→      const data = await res.json();
+   386→   386→      if (res.ok) {
+   387→   387→        setImportResult(data.message);
+   388→   388→        fetchBooks();
+   389→   389→      } else {
+   390→   390→        setImportResult('Error: ' + (data.error || 'Import failed'));
+   391→   391→      }
+   392→   392→    } catch (err) {
+   393→   393→      setImportResult('Error: Import failed');
+   394→   394→    }
+   395→   395→    setImporting(false);
+   396→   396→  };
+   397→   397→
+   398→   398→  // Handle export
+   399→   399→  const handleExport = async (format: string, sections: string) => {
+   400→   400→    if (!exportBookId) return;
+   401→   401→    setExporting(true);
+   402→   402→    try {
+   403→   403→      const res = await fetch('/api/export', {
+   404→   404→        method: 'POST',
+   405→   405→        headers: {
+   406→   406→          'Content-Type': 'application/json',
+   407→   407→          Authorization: `Bearer ${useAppStore.getState().token}`,
+   408→   408→        },
+   409→   409→        body: JSON.stringify({ bookId: exportBookId, format, sections }),
+   410→   410→      });
+   411→   411→      if (res.ok) {
+   412→   412→        const blob = await res.blob();
+   413→   413→        if (blob.size === 0) {
+   414→   414→          alert('Export failed: empty file generated.');
+   415→   415→          setExporting(false);
+   416→   416→          return;
+   417→   417→        }
+   418→   418→        const url = URL.createObjectURL(blob);
+   419→   419→        const a = document.createElement('a');
+   420→   420→        a.href = url;
+   421→   421→        const book = books.find(b => b.id === exportBookId);
+   422→   422→        const ext = format;
+   423→   423→        a.download = `${(book?.title || 'export').replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+   424→   424→        a.click();
+   425→   425→        URL.revokeObjectURL(url);
+   426→   426→        setShowExport(false);
+   427→   427→      } else {
+   428→   428→        const errData = await res.json();
+   429→   429→        alert('Export error: ' + (errData.error || 'Unknown error'));
+   430→   430→      }
+   431→   431→    } catch (err) {
+   432→   432→      alert('Export failed: ' + (err instanceof Error ? err.message : 'Network error'));
+   433→   433→    }
+   434→   434→    setExporting(false);
+   435→   435→  };
+   436→   436→
+   437→   437→  const totalWords = books.reduce((sum, b) => sum + b.totalWords, 0);
+   438→   438→
+   439→   439→  const inputCls =
+   440→   440→    'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500';
+   441→   441→
+   442→   442→  return (
+   443→   443→    <div className="min-h-screen bg-zinc-950">
+   444→   444→      <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-10">
+   445→   445→        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+   446→   446→          <div className="flex items-center gap-3">
+   447→   447→            <BookOpen className="w-6 h-6 text-amber-500" />
+   448→   448→            <h1 className="text-xl font-bold text-zinc-100 tracking-tight">NovelForge</h1>
+   449→   449→          </div>
+   450→   450→          <div className="flex items-center gap-2">
+   451→   451→            <Button
+   452→   452→              variant="ghost"
+   453→   453→              size="sm"
+   454→   454→              onClick={() => { setImportBookId(null); setImportFile(null); setImportResult(null); setImportMode('ai'); setShowImport(true); }}
+   455→   455→              className="text-zinc-400 hover:text-zinc-200"
+   456→   456→            >
+   457→   457→              <Upload className="w-4 h-4 mr-2" />
+   458→   458→              <span className="hidden sm:inline">Import</span>
+   459→   459→            </Button>
+   460→   460→            <Button
+   461→   461→              variant="ghost"
+   462→   462→              size="sm"
+   463→   463→              onClick={() => { setExportBookId(null); setShowExport(true); }}
+   464→   464→              className="text-zinc-400 hover:text-zinc-200"
+   465→   465→            >
+   466→   466→              <Download className="w-4 h-4 mr-2" />
+   467→   467→              <span className="hidden sm:inline">Export</span>
+   468→   468→            </Button>
+   469→   469→            <Button
+   470→   470→              variant="ghost"
+   471→   471→              size="sm"
+   472→   472→              onClick={() => setView('settings')}
+   473→   473→              className="text-zinc-400 hover:text-zinc-200"
+   474→   474→            >
+   475→   475→              <Settings className="w-4 h-4 mr-2" />
+   476→   476→              <span className="hidden sm:inline">Settings</span>
+   477→   477→            </Button>
+   478→   478→          </div>
+   479→   479→        </div>
+   480→   480→      </header>
+   481→   481→
+   482→   482→      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+   483→   483→        {/* Stats Bar */}
+   484→   484→        <div className="flex items-center justify-between mb-8">
+   485→   485→          <div>
+   486→   486→            <h2 className="text-2xl font-bold text-zinc-100">My Books</h2>
+   487→   487→            <p className="text-zinc-500 text-sm mt-1">
+   488→   488→              {books.length} {books.length === 1 ? 'book' : 'books'} &middot;{' '}
+   489→   489→              {formatWordCount(totalWords)} words total
+   490→   490→            </p>
+   491→   491→          </div>
+   492→   492→
+   493→   493→          {/* Create Dialog */}
+   494→   494→          <Dialog open={showCreate} onOpenChange={(open) => {
+   495→   495→            if (!open) resetCreateForm();
+   496→   496→            setShowCreate(open);
+   497→   497→          }}>
+   498→   498→            <DialogTrigger asChild>
+   499→   499→              <Button className="bg-amber-600 hover:bg-amber-500 text-white">
+   500→   500→                <Plus className="w-4 h-4 mr-2" />
+   501→   501→                New Book
+   502→   502→              </Button>
+   503→   503→            </DialogTrigger>
+   504→   504→            <DialogContent className="bg-zinc-900 border-zinc-800">
+   505→   505→              <DialogHeader>
+   506→   506→                <DialogTitle className="text-zinc-100">Create New Book</DialogTitle>
+   507→   507→              </DialogHeader>
+   508→   508→              <div className="space-y-4 pt-2">
+   509→   509→                <Input
+   510→   510→                  placeholder="Book Title"
+   511→   511→                  value={newTitle}
+   512→   512→                  onChange={(e) => setNewTitle(e.target.value)}
+   513→   513→                  className={inputCls}
+   514→   514→                  autoFocus
+   515→   515→                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+   516→   516→                />
+   517→   517→                <Input
+   518→   518→                  placeholder="Genre (optional)"
+   519→   519→                  value={newGenre}
+   520→   520→                  onChange={(e) => setNewGenre(e.target.value)}
+   521→   521→                  className={inputCls}
+   522→   522→                />
+   523→   523→
+   524→   524→                {/* Advanced Options Toggle */}
+   525→   525→                <button
+   526→   526→                  type="button"
+   527→   527→                  onClick={() => setShowAdvanced((prev) => !prev)}
+   528→   528→                  className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+   529→   529→                >
+   530→   530→                  Advanced options {showAdvanced ? '▲' : '▼'}
+   531→   531→                </button>
+   532→   532→
+   533→   533→                {showAdvanced && (
+   534→   534→                  <div className="space-y-4 pl-0">
+   535→   535→                    {/* Cover Upload */}
+   536→   536→                    <div className="space-y-1.5">
+   537→   537→                      <label className="text-xs text-zinc-400">Cover Image</label>
+   538→   538→                      <div className="flex items-center gap-3">
+   539→   539→                        {newCoverPath ? (
+   540→   540→                          <div className="relative w-16 h-22 rounded overflow-hidden border border-zinc-700 shrink-0">
+   541→   541→                            <img src={newCoverPath} alt="Cover" className="w-full h-full object-cover" />
+   542→   542→                            <button
+   543→   543→                              type="button"
+   544→   544→                              onClick={() => setNewCoverPath('')}
+   545→   545→                              className="absolute top-0.5 right-0.5 w-5 h-5 bg-zinc-900/80 rounded-full flex items-center justify-center"
+   546→   546→                            >
+   547→   547→                              <X className="w-3 h-3 text-zinc-400" />
+   548→   548→                            </button>
+   549→   549→                          </div>
+   550→   550→                        ) : null}
+   551→   551→                        <label className="flex-1 cursor-pointer">
+   552→   552→                          <input
+   553→   553→                            type="file"
+   554→   554→                            accept="image/*"
+   555→   555→                            className="hidden"
+   556→   556→                            onChange={(e) => {
+   557→   557→                              const f = e.target.files?.[0];
+   558→   558→                              if (f) uploadCover(f, 'create');
+   559→   559→                            }}
+   560→   560→                          />
+   561→   561→                          <div className={`${inputCls} flex items-center justify-center h-10 border border-dashed border-zinc-700 rounded-md hover:border-zinc-500 transition-colors`}>
+   562→   562→                            {uploadingCover ? (
+   563→   563→                              <span className="text-xs text-zinc-500">Uploading...</span>
+   564→   564→                            ) : (
+   565→   565→                              <>
+   566→   566→                                <ImagePlus className="w-4 h-4 text-zinc-500 mr-2" />
+   567→   567→                                <span className="text-xs text-zinc-500">Choose cover image</span>
+   568→   568→                              </>
+   569→   569→                            )}
+   570→   570→                          </div>
+   571→   571→                        </label>
+   572→   572→                      </div>
+   573→   573→                    </div>
+   574→   574→                    <Textarea
+   575→   575→                      placeholder="Description / Synopsis (optional)"
+   576→   576→                      value={newDescription}
+   577→   577→                      onChange={(e) => setNewDescription(e.target.value)}
+   578→   578→                      className={`${inputCls} min-h-[80px]`}
+   579→   579→                    />
+   580→   580→                    <Input
+   581→   581→                      placeholder="Pen Name (optional)"
+   582→   582→                      value={newPenName}
+   583→   583→                      onChange={(e) => setNewPenName(e.target.value)}
+   584→   584→                      className={inputCls}
+   585→   585→                    />
+   586→   586→                    <div className="space-y-1.5">
+   587→   587→                      <label className="text-xs text-zinc-400">Point of View</label>
+   588→   588→                      <Select value={newPov} onValueChange={setNewPov}>
+   589→   589→                        <SelectTrigger className={`w-full ${inputCls}`}>
+   590→   590→                          <SelectValue />
+   591→   591→                        </SelectTrigger>
+   592→   592→                        <SelectContent className="bg-zinc-900 border-zinc-800">
+   593→   593→                          {POV_OPTIONS.map((opt) => (
+   594→   594→                            <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   595→   595→                              {opt.label}
+   596→   596→                            </SelectItem>
+   597→   597→                          ))}
+   598→   598→                        </SelectContent>
+   599→   599→                      </Select>
+   600→   600→                    </div>
+   601→   601→                    <Input
+   602→   602→                      type="number"
+   603→   603→                      placeholder="Word Count Goal (e.g. 80000)"
+   604→   604→                      value={newWordCountGoal}
+   605→   605→                      onChange={(e) => setNewWordCountGoal(e.target.value)}
+   606→   606→                      className={inputCls}
+   607→   607→                      min={0}
+   608→   608→                    />
+   609→   609→                    <div className="space-y-1.5">
+   610→   610→                      <label className="text-xs text-zinc-400">Language</label>
+   611→   611→                      <Select value={newLanguage} onValueChange={setNewLanguage}>
+   612→   612→                        <SelectTrigger className={`w-full ${inputCls}`}>
+   613→   613→                          <SelectValue />
+   614→   614→                        </SelectTrigger>
+   615→   615→                        <SelectContent className="bg-zinc-900 border-zinc-800">
+   616→   616→                          {LANGUAGE_OPTIONS.map((opt) => (
+   617→   617→                            <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   618→   618→                              {opt.label}
+   619→   619→                            </SelectItem>
+   620→   620→                          ))}
+   621→   621→                        </SelectContent>
+   622→   622→                      </Select>
+   623→   623→                    </div>
+   624→   624→                  </div>
+   625→   625→                )}
+   626→   626→
+   627→   627→                <div className="flex justify-end gap-2 pt-2">
+   628→   628→                  <Button
+   629→   629→                    variant="ghost"
+   630→   630→                    onClick={() => {
+   631→   631→                      resetCreateForm();
+   632→   632→                      setShowCreate(false);
+   633→   633→                    }}
+   634→   634→                    className="text-zinc-400"
+   635→   635→                  >
+   636→   636→                    Cancel
+   637→   637→                  </Button>
+   638→   638→                  <Button
+   639→   639→                    onClick={handleCreate}
+   640→   640→                    disabled={!newTitle.trim() || creating}
+   641→   641→                    className="bg-amber-600 hover:bg-amber-500 text-white"
+   642→   642→                  >
+   643→   643→                    {creating ? 'Creating...' : 'Create'}
+   644→   644→                  </Button>
+   645→   645→                </div>
+   646→   646→              </div>
+   647→   647→            </DialogContent>
+   648→   648→          </Dialog>
+   649→   649→        </div>
+   650→   650→
+   651→   651→        {/* Book Grid */}
+   652→   652→        {loading ? (
+   653→   653→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   654→   654→            {[1, 2, 3].map((i) => (
+   655→   655→              <div key={i} className="h-48 bg-zinc-900 rounded-xl border border-zinc-800 animate-pulse" />
+   656→   656→            ))}
+   657→   657→          </div>
+   658→   658→        ) : books.length === 0 ? (
+   659→   659→          <div className="text-center py-20">
+   660→   660→            <BookOpen className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+   661→   661→            <h3 className="text-zinc-400 text-lg font-medium">No books yet</h3>
+   662→   662→            <p className="text-zinc-600 text-sm mt-1">Create your first book to start writing.</p>
+   663→   663→          </div>
+   664→   664→        ) : (
+   665→   665→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   666→   666→            {books.map((book) => {
+   667→   667→              const meta = bookMeta[book.id];
+   668→   668→              const goal = meta?.wordCountGoal;
+   669→   669→              const hasSeries = meta?.seriesId != null;
+   670→   670→              const coverUrl = meta?.coverImagePath;
+   671→   671→              const progress =
+   672→   672→                goal && goal > 0
+   673→   673→                  ? Math.min(100, (book.totalWords / goal) * 100)
+   674→   674→                  : null;
+   675→   675→              const goalMet = progress !== null && progress >= 100;
+   676→   676→
+   677→   677→              return (
+   678→   678→                <div
+   679→   679→                  key={book.id}
+   680→   680→                  className={`group relative border rounded-xl cursor-pointer transition-all duration-200 overflow-hidden ${
+   681→   681→                    goalMet
+   682→   682→                      ? 'bg-emerald-950/30 border-emerald-900/40 hover:border-emerald-800/60'
+   683→   683→                      : 'bg-zinc-900/80 border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900'
+   684→   684→                  }`}
+   685→   685→                  onClick={() => openBook(book.id)}
+   686→   686→                >
+   687→   687→                  {/* Cover Image */}
+   688→   688→                  {coverUrl ? (
+   689→   689→                    <div className="h-32 w-full overflow-hidden bg-zinc-800">
+   690→   690→                      <img src={coverUrl} alt={book.title} className="w-full h-full object-cover" />
+   691→   691→                    </div>
+   692→   692→                  ) : null}
+   693→   693→                  <div className="p-5">
+   694→   694→                  <div className="flex items-start justify-between mb-3">
+   695→   695→                    <div className="flex-1 min-w-0">
+   696→   696→                      <div className="flex items-center gap-2">
+   697→   697→                        <h3 className="font-semibold text-zinc-100 truncate">{book.title}</h3>
+   698→   698→                        {hasSeries && (
+   699→   699→                          <Badge
+   700→   700→                            variant="outline"
+   701→   701→                            className="shrink-0 bg-zinc-800/80 text-zinc-400 border-zinc-700 text-[10px] px-1.5 py-0"
+   702→   702→                          >
+   703→   703→                            <Bookmark className="w-2.5 h-2.5 mr-0.5" />
+   704→   704→                            Series
+   705→   705→                          </Badge>
+   706→   706→                        )}
+   707→   707→                      </div>
+   708→   708→                      {book.genre && (
+   709→   709→                        <p className="text-zinc-500 text-sm mt-0.5">{book.genre}</p>
+   710→   710→                      )}
+   711→   711→                    </div>
+   712→   712→                    <DropdownMenu>
+   713→   713→                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+   714→   714→                        <Button
+   715→   715→                          variant="ghost"
+   716→   716→                          size="icon"
+   717→   717→                          className="h-8 w-8 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity"
+   718→   718→                        >
+   719→   719→                          <MoreVertical className="w-4 h-4" />
+   720→   720→                        </Button>
+   721→   721→                      </DropdownMenuTrigger>
+   722→   722→                      <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+   723→   723→                        <DropdownMenuItem
+   724→   724→                          className="text-zinc-300 focus:text-zinc-100"
+   725→   725→                          onClick={(e) => { e.stopPropagation(); openEditDialog(book.id, e); }}
+   726→   726→                        >
+   727→   727→                          <Pencil className="w-4 h-4 mr-2" />
+   728→   728→                          Edit Details
+   729→   729→                        </DropdownMenuItem>
+   730→   730→                        <DropdownMenuItem
+   731→   731→                          className="text-zinc-300 focus:text-zinc-100"
+   732→   732→                          onClick={(e) => {
+   733→   733→                            e.stopPropagation();
+   734→   734→                            setImportBookId(book.id);
+   735→   735→                            setImportFile(null);
+   736→   736→                            setImportResult(null);
+   737→   737→                            setImportMode('ai');
+   738→   738→                            setShowImport(true);
+   739→   739→                          }}
+   740→   740→                        >
+   741→   741→                          <Upload className="w-4 h-4 mr-2" />
+   742→   742→                          Import Document
+   743→   743→                        </DropdownMenuItem>
+   744→   744→                        <DropdownMenuItem
+   745→   745→                          className="text-zinc-300 focus:text-zinc-100"
+   746→   746→                          onClick={(e) => {
+   747→   747→                            e.stopPropagation();
+   748→   748→                            setExportBookId(book.id);
+   749→   749→                            setShowExport(true);
+   750→   750→                          }}
+   751→   751→                        >
+   752→   752→                          <Download className="w-4 h-4 mr-2" />
+   753→   753→                          Export Book
+   754→   754→                        </DropdownMenuItem>
+   755→   755→                        <DropdownMenuItem
+   756→   756→                          className="text-zinc-300 focus:text-zinc-100"
+   757→   757→                          onClick={(e) => {
+   758→   758→                            e.stopPropagation();
+   759→   759→                            setActiveBookId(book.id);
+   760→   760→                            useAppStore.getState().setAiPanelOpen(true);
+   761→   761→                            useAppStore.getState().setRightPanelTab('codex');
+   762→   762→                            setView('editor');
+   763→   763→                          }}
+   764→   764→                        >
+   765→   765→                          <Database className="w-4 h-4 mr-2" />
+   766→   766→                          View Codex
+   767→   767→                        </DropdownMenuItem>
+   768→   768→                        <DropdownMenuItem
+   769→   769→                          className="text-red-400 focus:text-red-300"
+   770→   770→                          onClick={(e) => {
+   771→   771→                            e.stopPropagation();
+   772→   772→                            handleDelete(book.id);
+   773→   773→                          }}
+   774→   774→                        >
+   775→   775→                          <Trash2 className="w-4 h-4 mr-2" />
+   776→   776→                          Delete Book
+   777→   777→                        </DropdownMenuItem>
+   778→   778→                      </DropdownMenuContent>
+   779→   779→                    </DropdownMenu>
+   780→   780→                  </div>
+   781→   781→
+   782→   782→                  {book.description && (
+   783→   783→                    <p className="text-zinc-500 text-sm line-clamp-2 mb-4">{book.description}</p>
+   784→   784→                  )}
+   785→   785→
+   786→   786→                  {/* Word Count Goal Progress */}
+   787→   787→                  {goal && goal > 0 && (
+   788→   788→                    <div className="mb-4">
+   789→   789→                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-1.5">
+   790→   790→                        <span>
+   791→   791→                          {formatWordCount(book.totalWords)} / {formatWordCount(goal)} words
+   792→   792→                        </span>
+   793→   793→                        <span>{Math.round(progress ?? 0)}%</span>
+   794→   794→                      </div>
+   795→   795→                      <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+   796→   796→                        <div
+   797→   797→                          className={`h-full rounded-full transition-all duration-500 ${
+   798→   798→                            goalMet
+   799→   799→                              ? 'bg-emerald-500'
+   800→   800→                              : 'bg-amber-500'
+   801→   801→                          }`}
+   802→   802→                          style={{ width: `${progress ?? 0}%` }}
+   803→   803→                        />
+   804→   804→                      </div>
+   805→   805→                    </div>
+   806→   806→                  )}
+   807→   807→
+   808→   808→                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-800/50">
+   809→   809→                    <div className="flex items-center gap-3 text-xs text-zinc-500">
+   810→   810→                      <span className="flex items-center gap-1">
+   811→   811→                        <FileText className="w-3.5 h-3.5" />
+   812→   812→                        {book.chapterCount} {book.chapterCount === 1 ? 'ch' : 'ch'}
+   813→   813→                      </span>
+   814→   814→                      <span className="flex items-center gap-1">
+   815→   815→                        <PenLine className="w-3.5 h-3.5" />
+   816→   816→                        {formatWordCount(book.totalWords)} words
+   817→   817→                      </span>
+   818→   818→                    </div>
+   819→   819→                    <Badge variant="outline" className={STATUS_COLORS[book.status] || ''}>
+   820→   820→                      {STATUS_LABELS[book.status] || book.status}
+   821→   821→                    </Badge>
+   822→   822→                  </div>
+   823→   823→                  </div>
+   824→   824→                </div>
+   825→   825→              );
+   826→   826→            })}
+   827→   827→          </div>
+   828→   828→        )}
+   829→   829→      </main>
+   830→   830→
+   831→   831→      {/* Edit Details Dialog */}
+   832→   832→      <Dialog open={showEdit} onOpenChange={(open) => {
+   833→   833→        if (!open) setEditBookId(null);
+   834→   834→        setShowEdit(open);
+   835→   835→      }}>
+   836→   836→        <DialogContent className="bg-zinc-900 border-zinc-800">
+   837→   837→          <DialogHeader>
+   838→   838→            <DialogTitle className="text-zinc-100">Edit Book Details</DialogTitle>
+   839→   839→          </DialogHeader>
+   840→   840→          {editLoading ? (
+   841→   841→            <div className="py-8 flex items-center justify-center">
+   842→   842→              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+   843→   843→            </div>
+   844→   844→          ) : (
+   845→   845→            <div className="space-y-4 pt-2">
+   846→   846→              <Input
+   847→   847→                placeholder="Book Title"
+   848→   848→                value={editTitle}
+   849→   849→                onChange={(e) => setEditTitle(e.target.value)}
+   850→   850→                className={inputCls}
+   851→   851→                autoFocus
+   852→   852→              />
+   853→   853→              <Input
+   854→   854→                placeholder="Genre (optional)"
+   855→   855→                value={editGenre}
+   856→   856→                onChange={(e) => setEditGenre(e.target.value)}
+   857→   857→                className={inputCls}
+   858→   858→              />
+   859→   859→
+   860→   860→              {/* Advanced Options Toggle */}
+   861→   861→              <button
+   862→   862→                type="button"
+   863→   863→                onClick={() => setEditShowAdvanced((prev) => !prev)}
+   864→   864→                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+   865→   865→              >
+   866→   866→                Advanced options {editShowAdvanced ? '▲' : '▼'}
+   867→   867→              </button>
+   868→   868→
+   869→   869→              {editShowAdvanced && (
+   870→   870→                <div className="space-y-4 pl-0">
+   871→   871→                  <Textarea
+   872→   872→                    placeholder="Description / Synopsis (optional)"
+   873→   873→                    value={editDescription}
+   874→   874→                    onChange={(e) => setEditDescription(e.target.value)}
+   875→   875→                    className={`${inputCls} min-h-[80px]`}
+   876→   876→                  />
+   877→   877→                  <Input
+   878→   878→                    placeholder="Pen Name (optional)"
+   879→   879→                    value={editPenName}
+   880→   880→                    onChange={(e) => setEditPenName(e.target.value)}
+   881→   881→                    className={inputCls}
+   882→   882→                  />
+   883→   883→                  <div className="space-y-1.5">
+   884→   884→                    <label className="text-xs text-zinc-400">Point of View</label>
+   885→   885→                    <Select value={editPov} onValueChange={setEditPov}>
+   886→   886→                      <SelectTrigger className={`w-full ${inputCls}`}>
+   887→   887→                        <SelectValue />
+   888→   888→                      </SelectTrigger>
+   889→   889→                      <SelectContent className="bg-zinc-900 border-zinc-800">
+   890→   890→                        {POV_OPTIONS.map((opt) => (
+   891→   891→                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   892→   892→                            {opt.label}
+   893→   893→                          </SelectItem>
+   894→   894→                        ))}
+   895→   895→                      </SelectContent>
+   896→   896→                    </Select>
+   897→   897→                  </div>
+   898→   898→                  <Input
+   899→   899→                    type="number"
+   900→   900→                    placeholder="Word Count Goal (e.g. 80000)"
+   901→   901→                    value={editWordCountGoal}
+   902→   902→                    onChange={(e) => setEditWordCountGoal(e.target.value)}
+   903→   903→                    className={inputCls}
+   904→   904→                    min={0}
+   905→   905→                  />
+   906→   906→                  <div className="space-y-1.5">
+   907→   907→                    <label className="text-xs text-zinc-400">Language</label>
+   908→   908→                    <Select value={editLanguage} onValueChange={setEditLanguage}>
+   909→   909→                      <SelectTrigger className={`w-full ${inputCls}`}>
+   910→   910→                        <SelectValue />
+   911→   911→                      </SelectTrigger>
+   912→   912→                      <SelectContent className="bg-zinc-900 border-zinc-800">
+   913→   913→                        {LANGUAGE_OPTIONS.map((opt) => (
+   914→   914→                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   915→   915→                            {opt.label}
+   916→   916→                          </SelectItem>
+   917→   917→                        ))}
+   918→   918→                      </SelectContent>
+   919→   919→                    </Select>
+   920→   920→                  </div>
+   921→   921→
+   922→   922→                  {/* Cover Upload */}
+   923→   923→                  <div className="space-y-1.5">
+   924→   924→                    <label className="text-xs text-zinc-400">Cover Image</label>
+   925→   925→                    <div className="flex items-center gap-3">
+   926→   926→                      {editCoverPath ? (
+   927→   927→                        <div className="relative w-16 h-22 rounded overflow-hidden border border-zinc-700 shrink-0">
+   928→   928→                          <img src={editCoverPath} alt="Cover" className="w-full h-full object-cover" />
+   929→   929→                          <button
+   930→   930→                            onClick={() => setEditCoverPath('')}
+   931→   931→                            className="absolute top-0.5 right-0.5 w-5 h-5 bg-zinc-900/80 rounded-full flex items-center justify-center"
+   932→   932→                          >
+   933→   933→                            <X className="w-3 h-3 text-zinc-400" />
+   934→   934→                          </button>
+   935→   935→                        </div>
+   936→   936→                      ) : null}
+   937→   937→                      <label className="flex-1 cursor-pointer">
+   938→   938→                        <input
+   939→   939→                          type="file"
+   940→   940→                          accept="image/*"
+   941→   941→                          className="hidden"
+   942→   942→                          onChange={(e) => {
+   943→   943→                            const f = e.target.files?.[0];
+   944→   944→                            if (f) uploadCover(f, 'edit');
+   945→   945→                          }}
+   946→   946→                        />
+   947→   947→                        <div className={`${inputCls} flex items-center justify-center h-10 border border-dashed border-zinc-700 rounded-md hover:border-zinc-500 transition-colors`}>
+   948→   948→                          {uploadingCover ? (
+   949→   949→                            <span className="text-xs text-zinc-500">Uploading...</span>
+   950→   950→                          ) : (
+   951→   951→                            <>
+   952→   952→                              <ImagePlus className="w-4 h-4 text-zinc-500 mr-2" />
+   953→   953→                              <span className="text-xs text-zinc-500">Choose image</span>
+   954→   954→                            </>
+   955→   955→                          )}
+   956→   956→                        </div>
+   957→   957→                      </label>
+   958→   958→                    </div>
+   959→   959→                  </div>
+   960→   960→
+   961→   961→                  {/* Style & Prose */}
+   962→   962→                  <div className="space-y-1.5">
+   963→   963→                    <label className="text-xs text-zinc-400">Prose Style</label>
+   964→   964→                    <Select value={editProseStyle} onValueChange={setEditProseStyle}>
+   965→   965→                      <SelectTrigger className={`w-full ${inputCls}`}>
+   966→   966→                        <SelectValue placeholder="Select style..." />
+   967→   967→                      </SelectTrigger>
+   968→   968→                      <SelectContent className="bg-zinc-900 border-zinc-800">
+   969→   969→                        {PROSE_STYLES.map((opt) => (
+   970→   970→                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   971→   971→                            {opt.label}
+   972→   972→                          </SelectItem>
+   973→   973→                        ))}
+   974→   974→                      </SelectContent>
+   975→   975→                    </Select>
+   976→   976→                  </div>
+   977→   977→                  <div className="space-y-1.5">
+   978→   978→                    <label className="text-xs text-zinc-400">Tone</label>
+   979→   979→                    <Select value={editTone} onValueChange={setEditTone}>
+   980→   980→                      <SelectTrigger className={`w-full ${inputCls}`}>
+   981→   981→                        <SelectValue placeholder="Select tone..." />
+   982→   982→                      </SelectTrigger>
+   983→   983→                      <SelectContent className="bg-zinc-900 border-zinc-800">
+   984→   984→                        {TONE_OPTIONS.map((opt) => (
+   985→   985→                          <SelectItem key={opt.value} value={opt.value} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+   986→   986→                            {opt.label}
+   987→   987→                          </SelectItem>
+   988→   988→                        ))}
+   989→   989→                      </SelectContent>
+   990→   990→                    </Select>
+   991→   991→                  </div>
+   992→   992→                  <div className="space-y-1.5">
+   993→   993→                    <label className="text-xs text-zinc-400">Custom AI System Prompt</label>
+   994→   994→                    <Textarea
+   995→   995→                      placeholder="Tell the AI how to write for this book..."
+   996→   996→                      value={editCustomPrompt}
+   997→   997→                      onChange={(e) => setEditCustomPrompt(e.target.value)}
+   998→   998→                      className={`${inputCls} min-h-[60px]`}
+   999→   999→                    />
+  1000→  1000→                  </div>
+  1001→  1001→                </div>
+  1002→  1002→              )}
+  1003→  1003→
+  1004→  1004→              <div className="flex justify-end gap-2 pt-2">
+  1005→  1005→                <Button
+  1006→  1006→                  variant="ghost"
+  1007→  1007→                  onClick={() => {
+  1008→  1008→                    setShowEdit(false);
+  1009→  1009→                    setEditBookId(null);
+  1010→  1010→                  }}
+  1011→  1011→                  className="text-zinc-400"
+  1012→  1012→                >
+  1013→  1013→                  Cancel
+  1014→  1014→                </Button>
+  1015→  1015→                <Button
+  1016→  1016→                  onClick={handleEditSave}
+  1017→  1017→                  disabled={!editTitle.trim() || editSaving}
+  1018→  1018→                  className="bg-amber-600 hover:bg-amber-500 text-white"
+  1019→  1019→                >
+  1020→  1020→                  {editSaving ? 'Saving...' : 'Save Changes'}
+  1021→  1021→                </Button>
+  1022→  1022→              </div>
+  1023→  1023→            </div>
+  1024→  1024→          )}
+  1025→  1025→        </DialogContent>
+  1026→  1026→      </Dialog>
+  1027→  1027→
+  1028→  1028→      {/* Import Dialog */}
+  1029→  1029→      <Dialog open={showImport} onOpenChange={(open) => { if (!open) { setShowImport(false); setImportResult(null); } }}>
+  1030→  1030→        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+  1031→  1031→          <DialogHeader>
+  1032→  1032→            <DialogTitle className="text-zinc-100">Import Document</DialogTitle>
+  1033→  1033→          </DialogHeader>
+  1034→  1034→          <div className="space-y-4 pt-2">
+  1035→  1035→            <p className="text-sm text-zinc-400">Upload a .txt, .docx, or .pdf file. Choose AI mode to auto-parse into chapters/scenes/codex, or Raw mode to import as plain text.</p>
+  1036→  1036→            {!importBookId && books.length > 0 ? (
+  1037→  1037→              <div className="space-y-1.5">
+  1038→  1038→                <label className="text-xs text-zinc-400">Select Book</label>
+  1039→  1039→                <Select onValueChange={(v) => setImportBookId(v)}>
+  1040→  1040→                  <SelectTrigger className={`w-full ${inputCls}`}>
+  1041→  1041→                    <SelectValue placeholder="Choose a book..." />
+  1042→  1042→                  </SelectTrigger>
+  1043→  1043→                  <SelectContent className="bg-zinc-900 border-zinc-800">
+  1044→  1044→                    {books.map((b) => (
+  1045→  1045→                      <SelectItem key={b.id} value={b.id} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">{b.title}</SelectItem>
+  1046→  1046→                    ))}
+  1047→  1047→                  </SelectContent>
+  1048→  1048→                </Select>
+  1049→  1049→              </div>
+  1050→  1050→            ) : null}
+  1051→  1051→            <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-zinc-700 rounded-lg cursor-pointer hover:border-zinc-500 transition-colors">
+  1052→  1052→              <input
+  1053→  1053→                type="file"
+  1054→  1054→                accept=".txt,.docx,.pdf"
+  1055→  1055→                className="hidden"
+  1056→  1056→                onChange={(e) => { setImportFile(e.target.files?.[0] || null); setImportResult(null); }}
+  1057→  1057→              />
+  1058→  1058→              <Upload className="w-8 h-8 text-zinc-500 mb-2" />
+  1059→  1059→              <span className="text-sm text-zinc-400">
+  1060→  1060→                {importFile ? importFile.name : 'Click to select file'}
+  1061→  1061→              </span>
+  1062→  1062→              <span className="text-xs text-zinc-600 mt-1">.txt, .docx, .pdf</span>
+  1063→  1063→            </label>
+  1064→  1064→            {importResult && (
+  1065→  1065→              <p className={`text-sm ${importResult.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{importResult}</p>
+  1066→  1066→            )}
+  1067→  1067→            <div className="flex justify-between gap-2">
+  1068→  1068→              <Button variant="ghost" onClick={() => setShowImport(false)} className="text-zinc-400">Cancel</Button>
+  1069→  1069→              <div className="flex gap-2">
+  1070→  1070→                <Button
+  1071→  1071→                  variant="outline"
+  1072→  1072→                  onClick={() => { setImportMode('raw'); handleImport(); }}
+  1073→  1073→                  disabled={!importBookId || !importFile || importing}
+  1074→  1074→                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+  1075→  1075→                >
+  1076→  1076→                  {importing && importMode === 'raw' ? 'Importing...' : 'Raw Import'}
+  1077→  1077→                </Button>
+  1078→  1078→                <Button
+  1079→  1079→                  onClick={() => { setImportMode('ai'); handleImport(); }}
+  1080→  1080→                  disabled={!importBookId || !importFile || importing}
+  1081→  1081→                  className="bg-amber-600 hover:bg-amber-500 text-white"
+  1082→  1082→                >
+  1083→  1083→                  {importing && importMode === 'ai' ? 'Importing...' : 'Import with AI'}
+  1084→  1084→                </Button>
+  1085→  1085→              </div>
+  1086→  1086→            </div>
+  1087→  1087→          </div>
+  1088→  1088→        </DialogContent>
+  1089→  1089→      </Dialog>
+  1090→  1090→
+  1091→  1091→      {/* Export Dialog */}
+  1092→  1092→      <Dialog open={showExport} onOpenChange={(open) => setShowExport(open)}>
+  1093→  1093→        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+  1094→  1094→          <DialogHeader>
+  1095→  1095→            <DialogTitle className="text-zinc-100">Export Book</DialogTitle>
+  1096→  1096→          </DialogHeader>
+  1097→  1097→          <div className="space-y-4 pt-2">
+  1098→  1098→            {!exportBookId && books.length > 0 ? (
+  1099→  1099→              <div className="space-y-1.5">
+  1100→  1100→                <label className="text-xs text-zinc-400">Select Book</label>
+  1101→  1101→                <Select onValueChange={(v) => setExportBookId(v)}>
+  1102→  1102→                  <SelectTrigger className={`w-full ${inputCls}`}>
+  1103→  1103→                    <SelectValue placeholder="Choose a book..." />
+  1104→  1104→                  </SelectTrigger>
+  1105→  1105→                  <SelectContent className="bg-zinc-900 border-zinc-800">
+  1106→  1106→                    {books.map((b) => (
+  1107→  1107→                      <SelectItem key={b.id} value={b.id} className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">{b.title}</SelectItem>
+  1108→  1108→                    ))}
+  1109→  1109→                  </SelectContent>
+  1110→  1110→                </Select>
+  1111→  1111→              </div>
+  1112→  1112→            ) : null}
+  1113→  1113→
+  1114→  1114→            <div className="space-y-1.5">
+  1115→  1115→              <label className="text-xs text-zinc-400">Content</label>
+  1116→  1116→              <Select defaultValue="manuscript" onValueChange={setExportSections}>
+  1117→  1117→                <SelectTrigger className={`w-full ${inputCls}`}>
+  1118→  1118→                  <SelectValue />
+  1119→  1119→                </SelectTrigger>
+  1120→  1120→                <SelectContent className="bg-zinc-900 border-zinc-800">
+  1121→  1121→                  <SelectItem value="manuscript" className="text-zinc-100">Manuscript only</SelectItem>
+  1122→  1122→                  <SelectItem value="codex" className="text-zinc-100">Codex (Story Bible)</SelectItem>
+  1123→  1123→                  <SelectItem value="outline" className="text-zinc-100">Outline</SelectItem>
+  1124→  1124→                  <SelectItem value="all" className="text-zinc-100">Everything</SelectItem>
+  1125→  1125→                </SelectContent>
+  1126→  1126→              </Select>
+  1127→  1127→            </div>
+  1128→  1128→
+  1129→  1129→            <div className="space-y-2">
+  1130→  1130→              <label className="text-xs text-zinc-400">Format</label>
+  1131→  1131→              <div className="grid grid-cols-2 gap-2">
+  1132→  1132→                {[{ fmt: 'pdf', label: 'PDF' }, { fmt: 'docx', label: 'DOCX' }, { fmt: 'epub', label: 'EPUB' }, { fmt: 'txt', label: 'TXT' }].map(({ fmt, label }) => (
+  1133→  1133→                  <Button
+  1134→  1134→                    key={fmt}
+  1135→  1135→                    variant="outline"
+  1136→  1136→                    disabled={!exportBookId || exporting}
+  1137→  1137→                    onClick={() => handleExport(fmt, exportSections)}
+  1138→  1138→                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+  1139→  1139→                  >
+  1140→  1140→                    {exporting ? 'Exporting...' : label}
+  1141→  1141→                  </Button>
+  1142→  1142→                ))}
+  1143→  1143→              </div>
+  1144→  1144→            </div>
+  1145→  1145→
+  1146→  1146→            <Button variant="ghost" onClick={() => setShowExport(false)} className="text-zinc-400 w-full">Close</Button>
+  1147→  1147→          </div>
+  1148→  1148→        </DialogContent>
+  1149→  1149→      </Dialog>
+  1150→  1150→    </div>
+  1151→  1151→  );
+  1152→  1152→}
