@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore, AiConfig } from '@/stores/useAppStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +42,7 @@ export function SettingsScreen() {
   const [confirmPw, setConfirmPw] = useState('');
   const [changingPw, setChangingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
+  const pwSectionRef = useRef<HTMLDivElement>(null);
 
   const token = useAppStore((s) => s.token);
   const setToken = useAppStore((s) => s.setToken);
@@ -65,6 +66,13 @@ export function SettingsScreen() {
   useEffect(() => {
     fetchConfigs();
   }, [fetchConfigs]);
+
+  // Scroll to password section if navigated via Password button
+  useEffect(() => {
+    if (window.location.hash === '#password' && pwSectionRef.current) {
+      setTimeout(() => pwSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+  }, []);
 
   // When provider changes, pre-fill default values
   const handleProviderChange = (p: string) => {
@@ -405,7 +413,7 @@ export function SettingsScreen() {
         <Separator className="bg-zinc-800" />
 
         {/* Change Password */}
-        <section>
+        <section ref={pwSectionRef} id="change-password">
           <div className="flex items-center gap-2 mb-4">
             <Shield className="w-5 h-5 text-amber-500" />
             <h2 className="text-lg font-semibold text-zinc-100">Change Password</h2>

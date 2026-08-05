@@ -36,6 +36,7 @@ import {
   ImagePlus,
   X,
   Database,
+  KeyRound,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -471,9 +472,20 @@ export function Bookshelf() {
               size="sm"
               onClick={() => setView('settings')}
               className="text-zinc-400 hover:text-zinc-200"
+              title="Settings & Change Password"
             >
               <Settings className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Settings</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { window.location.hash = 'password'; setView('settings'); }}
+              className="border-amber-600/30 text-amber-400 hover:bg-amber-600/10 hover:text-amber-300"
+              title="Change Password"
+            >
+              <KeyRound className="w-4 h-4 mr-1.5" />
+              <span>Password</span>
             </Button>
           </div>
         </div>
