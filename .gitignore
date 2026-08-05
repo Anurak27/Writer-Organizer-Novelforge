@@ -56,3 +56,4 @@ server.log
 # Skills directory
 /skills/db/
 scripts/seed-ai-keys.ts
+tool-results/
