@@ -99,3 +99,28 @@ Stage Summary:
 - PUT /api/codex/[id] now works correctly (was returning 500)
 - All 5 corrupted entries fixed in production DB
 - Defensive helpers prevent future occurrences of this type of data corruption
+---
+Task ID: 3
+Agent: Super Z (Main)
+Task: Fix scrolling in Codex panel & Chapter sidebar + add formatting toolbar
+
+Work Log:
+- Root cause: Radix ScrollArea Root element was missing `overflow-hidden` class, causing the viewport to expand infinitely instead of scrolling
+- Fixed `src/components/ui/scroll-area.tsx`: added `overflow-hidden` to the Root's base className
+- This single fix resolves scrolling in ALL ScrollArea instances (Codex panel, Chapter sidebar, AI panel, Chat, etc.)
+- Added formatting toolbar to SceneEditor between the scene header and the textarea:
+  - Bold (B), Italic (I), Strikethrough (S) with markdown wrapping
+  - Heading 1 (#), Heading 2 (##), Blockquote (>)
+  - Dialogue helper (wraps selection in smart quotes \u201C...\u201D)
+  - Em dash (\u2014), En dash (\u2013), Ellipsis (\u2026)
+  - Horizontal rule (---), Paragraph break
+  - Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic
+  - onMouseDown preventDefault on toolbar buttons to prevent textarea blur
+- FormattingButton component: lightweight button with icon or text, hover effects
+- wrapSelection/insertAtCursor/insertDialogue helper functions
+
+Stage Summary:
+- All panels (Codex, Chapters, AI, Chat, Snippets, Notes) now scroll properly
+- New formatting toolbar above the writing area with 12 formatting actions
+- Keyboard shortcuts Ctrl+B and Ctrl+I work in the editor
+- Deployed to Vercel via git push
