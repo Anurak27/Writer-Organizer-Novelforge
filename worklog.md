@@ -72,3 +72,30 @@ Stage Summary:
 - Codex entries now properly scoped to books
 - JSON export for full book backup
 - Chapter date field for diary entries
+---
+Task ID: 2
+Agent: Super Z (Main)
+Task: Fix `aliases.map is not a function` crash in codex + fix PUT /api/codex/[id] 500 error
+
+Work Log:
+- Root cause: 5 codex entries had `aliases` stored as raw strings (e.g. `"Ellie"`) instead of JSON arrays (e.g. `"[\"Ellie\"]"`) in the DB
+- Added `safeJsonParse()` and `ensureStringArray()` helpers to `src/lib/utils.ts` for defensive JSON parsing
+- Fixed `GET /api/codex` to use `safeJsonParse` instead of raw `JSON.parse`
+- Fixed `PUT /api/codex/[id]` with input validation + `safeJsonParse` for response + proper error logging
+- Fixed `POST /api/codex` with alias/tag/metadata validation/normalization
+- Fixed `CodexPanel.tsx`: 3 crash sites guarded with `ensureStringArray()` (render, search filter, edit dialog)
+- Fixed `MentionDropdown.tsx`: 2 crash sites guarded with `ensureStringArray()` (filter, render)
+- Fixed `chat/route.ts` and `ai/generate/route.ts`: server-side alias parsing now uses `safeJsonParse`
+- Deployed via git push to GitHub → Vercel auto-deploy
+- Fixed 5 corrupted DB entries via PUT API calls:
+  - Eleanor Hawthorne: `"Ellie"` → `["Ellie"]`
+  - Liv Carter: `"Liv"` → `["Liv"]`
+  - Ruby Marisol Gomez: `"Margarito"` → `["Margarito"]`
+  - Soo-Jin: `"Soo"` → `["Soo"]`
+  - William van der Velde: `"Will, Will van der Velde"` → `["Will", "Will van der Velde"]`
+
+Stage Summary:
+- App no longer crashes when opening books with codex entries that have string aliases
+- PUT /api/codex/[id] now works correctly (was returning 500)
+- All 5 corrupted entries fixed in production DB
+- Defensive helpers prevent future occurrences of this type of data corruption
