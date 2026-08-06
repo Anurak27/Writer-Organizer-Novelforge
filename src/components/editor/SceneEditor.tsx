@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Save, Clock, Sparkles, PanelRight, BookOpen, ListTree, MessageSquare, Target, ImagePlus, Download, Eye } from 'lucide-react';
+import { Save, Clock, Sparkles, PanelRight, BookOpen, ListTree, MessageSquare, Target, ImagePlus, Download, Eye, Bold, Italic, Heading1, Heading2, Quote, Minus, Pilcrow, Type } from 'lucide-react';
 import { MentionDropdown, extractMentions } from './MentionDropdown';
 import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
 
@@ -349,6 +349,66 @@ export function SceneEditor() {
     return String(w);
   };
 
+  // --- Formatting toolbar helpers ---
+  const wrapSelection = (before: string, after: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.slice(start, end);
+    const newContent = content.slice(0, start) + before + selected + after + content.slice(end);
+    setContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      if (selected) {
+        textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+      } else {
+        textarea.setSelectionRange(start + before.length, start + before.length);
+      }
+    }, 0);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => saveContent(newContent), 1000);
+  };
+
+  const insertAtCursor = (text: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const pos = textarea.selectionStart;
+    const newContent = content.slice(0, pos) + text + content.slice(pos);
+    setContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(pos + text.length, pos + text.length);
+    }, 0);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => saveContent(newContent), 1000);
+  };
+
+  const insertDialogue = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.slice(start, end);
+    if (selected) {
+      // Wrap selection in smart quotes
+      const newContent = content.slice(0, start) + '\u201C' + selected + '\u201D' + content.slice(end);
+      setContent(newContent);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + 1, start + 1 + selected.length);
+      }, 0);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => saveContent(newContent), 1000);
+    } else {
+      // Insert empty dialogue quotes with cursor between
+      insertAtCursor('\u201C\u201D');
+      setTimeout(() => {
+        textarea.setSelectionRange(start + 1, start + 1);
+      }, 0);
+    }
+  };
+
   if (!activeScene) {
     return (
       <div className="flex-1 flex items-center justify-center bg-zinc-950">
@@ -458,12 +518,40 @@ export function SceneEditor() {
         </div>
       </div>
 
+      {/* Formatting Toolbar */}
+      <div className="shrink-0 border-b border-zinc-800/50 px-2 sm:px-4 py-1.5 flex items-center gap-0.5 overflow-x-auto">
+        <FormattingButton title="Bold (Ctrl+B)" icon={<Bold className="w-3.5 h-3.5" />} onClick={() => wrapSelection('**', '**')} />
+        <FormattingButton title="Italic (Ctrl+I)" icon={<Italic className="w-3.5 h-3.5" />} onClick={() => wrapSelection('*', '*')} />
+        <FormattingButton title="Strikethrough" text="S" textStyle="line-through" onClick={() => wrapSelection('~~', '~~')} />
+        <div className="w-px h-5 bg-zinc-800 mx-1" />
+        <FormattingButton title="Heading 1" icon={<Heading1 className="w-3.5 h-3.5" />} onClick={() => wrapSelection('# ', '')} />
+        <FormattingButton title="Heading 2" icon={<Heading2 className="w-3.5 h-3.5" />} onClick={() => wrapSelection('## ', '')} />
+        <FormattingButton title="Quote" icon={<Quote className="w-3.5 h-3.5" />} onClick={() => wrapSelection('> ', '')} />
+        <div className="w-px h-5 bg-zinc-800 mx-1" />
+        <FormattingButton title="Dialogue \u201C...\u201D" icon={<Type className="w-3.5 h-3.5" />} onClick={insertDialogue} />
+        <FormattingButton title="Em dash \u2014" text="\u2014" onClick={() => insertAtCursor('\u2014')} />
+        <FormattingButton title="Ellipsis \u2026" text="\u2026" onClick={() => insertAtCursor('\u2026')} />
+        <FormattingButton title="En dash \u2013" text="\u2013" onClick={() => insertAtCursor('\u2013')} />
+        <div className="w-px h-5 bg-zinc-800 mx-1" />
+        <FormattingButton title="Horizontal rule" icon={<Minus className="w-3.5 h-3.5" />} onClick={() => insertAtCursor('\n---\n')} />
+        <FormattingButton title="Paragraph break" icon={<Pilcrow className="w-3.5 h-3.5" />} onClick={() => insertAtCursor('\n\n')} />
+      </div>
+
       {/* Editor Area */}
       <div className="flex-1 relative">
         <textarea
           ref={textareaRef}
           value={content}
           onChange={handleChange}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+              e.preventDefault();
+              wrapSelection('**', '**');
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+              e.preventDefault();
+              wrapSelection('*', '*');
+            }
+          }}
           placeholder="Start writing your scene here... Type / for commands, @ to reference Codex entries."
           className="scene-editor-textarea w-full h-full bg-transparent text-zinc-200 text-lg leading-relaxed resize-none p-6 sm:p-10 lg:px-20 lg:py-12 focus:outline-none placeholder:text-zinc-700 font-serif"
           style={{ fontSize: '18px', lineHeight: '1.85' }}
@@ -503,5 +591,39 @@ export function SceneEditor() {
         </div>
       </div>
     </div>
+  );
+}
+
+// --- Formatting Toolbar Button ---
+function FormattingButton({
+  title,
+  icon,
+  text,
+  textStyle,
+  onClick,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  text?: string;
+  textStyle?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
+      onMouseDown={(e) => e.preventDefault()} // prevent textarea blur
+      className="h-7 min-w-7 px-1.5 flex items-center justify-center rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/70 transition-colors"
+    >
+      {icon ? (
+        icon
+      ) : (
+        <span className={`text-xs font-medium ${textStyle || ''}`}>{text}</span>
+      )}
+    </button>
   );
 }
