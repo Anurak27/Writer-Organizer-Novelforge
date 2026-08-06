@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing bookId or format' }, { status: 400 });
     }
 
-    const allowedFormats = ['pdf', 'docx', 'txt', 'epub'];
+    const allowedFormats = ['pdf', 'docx', 'txt', 'epub', 'json'];
     if (!allowedFormats.includes(format)) {
       return NextResponse.json({ error: 'Invalid format' }, { status: 400 });
     }
@@ -71,6 +71,36 @@ export async function POST(req: NextRequest) {
     const stripImageTags = (content: string): string => {
       return content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[Image: $1]');
     };
+
+    if (format === 'json') {
+      const exportData = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        book: {
+          ...book,
+          chapters: chapters.map((ch) => ({
+            ...ch,
+            scenes: ch.scenes.map((sc) => ({
+              ...sc,
+              pinnedCodexIds: typeof sc.pinnedCodexIds === 'string' ? JSON.parse(sc.pinnedCodexIds) : sc.pinnedCodexIds,
+            })),
+          })),
+          codexEntries: codexEntries.map((e) => ({
+            ...e,
+            aliases: JSON.parse(e.aliases || '[]'),
+            tags: JSON.parse(e.tags || '[]'),
+            metadata: JSON.parse(e.metadata || '{}'),
+          })),
+        },
+      };
+
+      return new NextResponse(JSON.stringify(exportData, null, 2), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Disposition': `attachment; filename="${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.json"`,
+        },
+      });
+    }
 
     if (format === 'txt') {
       let txt = '';

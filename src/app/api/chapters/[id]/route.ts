@@ -9,13 +9,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
 
   try {
-    const { title, synopsis, sortOrder } = await request.json();
+    const { title, synopsis, sortOrder, date } = await request.json();
     const chapter = await db.chapter.update({
       where: { id },
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(synopsis !== undefined && { synopsis: synopsis?.trim() || null }),
         ...(sortOrder !== undefined && { sortOrder }),
+        ...(date !== undefined && { date: date?.trim() || null }),
       },
     });
     return NextResponse.json(chapter);

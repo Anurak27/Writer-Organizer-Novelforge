@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       include: {
         scenes: {
           orderBy: { sortOrder: 'asc' },
-          select: { id: true, title: true, status: true, wordCount: true, sortOrder: true },
+          select: { id: true, chapterId: true, title: true, content: true, notes: true, status: true, wordCount: true, sortOrder: true, pov: true, povTense: true, pinnedCodexIds: true, createdAt: true, updatedAt: true },
         },
       },
     });
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id: bookId } = await params;
 
   try {
-    const { title, synopsis } = await request.json();
+    const { title, synopsis, date } = await request.json();
     const maxOrder = await db.chapter.findFirst({
       where: { bookId },
       orderBy: { sortOrder: 'desc' },
@@ -45,6 +45,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         bookId,
         title: title?.trim() || 'Untitled Chapter',
         synopsis: synopsis?.trim() || null,
+        date: date?.trim() || null,
         sortOrder: nextOrder,
       },
       include: { scenes: { orderBy: { sortOrder: 'asc' } } },

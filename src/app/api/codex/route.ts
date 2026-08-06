@@ -25,10 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      where.OR = [
-        ...((where.OR as unknown[]) || []),
-        { name: { contains: search } },
-      ];
+      where.name = { contains: search, mode: 'insensitive' };
     }
 
     const entries = await db.codexEntry.findMany({

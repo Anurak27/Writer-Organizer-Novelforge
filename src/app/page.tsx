@@ -6,6 +6,7 @@ import { AuthScreen } from '@/components/auth/AuthScreen';
 import { Bookshelf } from '@/components/dashboard/Bookshelf';
 import { EditorView } from '@/components/editor/EditorView';
 import { SettingsScreen } from '@/components/ai/SettingsScreen';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function Home() {
   const view = useAppStore((s) => s.view);
@@ -34,7 +35,8 @@ export default function Home() {
           localStorage.removeItem('nf_token');
         });
     }
-  }, [setToken, setView]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist token to localStorage
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function Home() {
   }
 
   if (view === 'dashboard') {
-    return <Bookshelf />;
+    return <ErrorBoundary><Bookshelf /></ErrorBoundary>;
   }
 
   if (view === 'settings') {
@@ -58,7 +60,7 @@ export default function Home() {
   }
 
   if (view === 'editor') {
-    return <EditorView />;
+    return <ErrorBoundary><EditorView /></ErrorBoundary>;
   }
 
   return <AuthScreen />;

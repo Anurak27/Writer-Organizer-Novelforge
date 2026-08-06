@@ -144,7 +144,7 @@ export function CodexPanel() {
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
-        bookId: activeBookId || null,
+        bookId: activeBookId,
         imagePath: formImage || null,
       };
 

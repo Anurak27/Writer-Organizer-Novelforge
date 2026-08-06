@@ -3,23 +3,23 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model Book {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   title          String
   description    String?
   genre          String?
-  status         String    @default("draft")
-  sortOrder      Int       @default(0)
+  status         String   @default("draft")
+  sortOrder      Int      @default(0)
   penName        String?
-  language       String    @default("en")
+  language       String   @default("en")
   wordCountGoal  Int?
-  pov            String    @default("third_past")
-  povTense       String    @default("past")
+  pov            String   @default("third_past")
+  povTense       String   @default("past")
   synopsis       String?
   customPrompt   String?
   coverImagePath String?
@@ -27,111 +27,112 @@ model Book {
   tone           String?
   seriesId       String?
   seriesOrder    Int?
-  seriesParent   Book?     @relation("SeriesBooks", fields: [seriesId], references: [id], onDelete: SetNull)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  seriesParent   Book?    @relation("SeriesBooks", fields: [seriesId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  chapters       Chapter[]
-  codexEntries   CodexEntry[]
-  snippets       Snippet[]
-  seriesBooks    Book[]    @relation("SeriesBooks")
+  chapters     Chapter[]
+  codexEntries CodexEntry[]
+  snippets     Snippet[]
+  seriesBooks  Book[]       @relation("SeriesBooks")
 
   @@index([sortOrder])
   @@index([seriesId])
 }
 
 model Chapter {
-  id          String    @id @default(cuid())
-  bookId      String
-  title       String    @default("Untitled Chapter")
-  synopsis    String?
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  bookId    String
+  title     String   @default("Untitled Chapter")
+  synopsis  String?
+  date      String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  book        Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  scenes      Scene[]
+  book   Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  scenes Scene[]
 
   @@unique([bookId, sortOrder])
   @@index([bookId, sortOrder])
 }
 
 model Scene {
-  id              String    @id @default(cuid())
-  chapterId       String
-  title           String    @default("Untitled Scene")
-  content         String    @default("")
-  notes           String?
-  status          String    @default("outline")
-  wordCount       Int       @default(0)
-  sortOrder       Int       @default(0)
-  pov             String?
-  povTense        String?
-  pinnedCodexIds  String    @default("[]")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(cuid())
+  chapterId      String
+  title          String   @default("Untitled Scene")
+  content        String   @default("")
+  notes          String?
+  status         String   @default("outline")
+  wordCount      Int      @default(0)
+  sortOrder      Int      @default(0)
+  pov            String?
+  povTense       String?
+  pinnedCodexIds String   @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  chapter         Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   @@unique([chapterId, sortOrder])
   @@index([chapterId, sortOrder])
 }
 
 model CodexEntry {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   bookId      String?
   type        String
   name        String
-  description String    @default("")
-  aliases     String    @default("[]")
-  tags        String    @default("[]")
-  metadata    String    @default("{}")
+  description String   @default("")
+  aliases     String   @default("[]")
+  tags        String   @default("[]")
+  metadata    String   @default("{}")
   color       String?
   imagePath   String?
-  isPinned    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  book        Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  book Book? @relation(fields: [bookId], references: [id], onDelete: SetNull)
 
   @@index([bookId])
   @@index([type])
 }
 
 model Snippet {
-  id          String    @id @default(cuid())
-  bookId      String?
-  title       String
-  content     String    @default("")
-  category    String    @default("general")
-  tags        String    @default("[]")
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  bookId    String?
+  title     String
+  content   String   @default("")
+  category  String   @default("general")
+  tags      String   @default("[]")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  book        Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  book Book? @relation(fields: [bookId], references: [id], onDelete: SetNull)
 
   @@index([bookId])
   @@index([category])
 }
 
 model ChatMessage {
-  id          String    @id @default(cuid())
-  bookId      String?
-  role        String
-  content     String
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(cuid())
+  bookId    String?
+  role      String
+  content   String
+  createdAt DateTime @default(now())
 }
 
 model AiConfig {
-  id              String    @id @default(cuid())
-  provider        String
-  apiKey          String
-  baseUrl         String?
-  modelName       String?
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  provider  String
+  apiKey    String
+  baseUrl   String?
+  modelName String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UploadedImage {

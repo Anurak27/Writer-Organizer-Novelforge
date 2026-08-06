@@ -53,3 +53,22 @@ Stage Summary:
 - Export errors now show alerts with error details
 - Codex accessible via View Codex in book dropdown
 - Deployed: https://writer-organizer-novelforge.vercel.app
+---
+Task ID: 1
+Agent: main
+Task: Fix critical bugs and add features from bug report
+
+Work Log:
+- Added ErrorBoundary component
+- Wrapped EditorView and Bookshelf with ErrorBoundary
+- Fixed chapters GET API to return complete scene data
+- Fixed codex bookId null issue
+- Added JSON export format
+- Added date field to Chapter model
+- Fixed codex search API
+
+Stage Summary:
+- Critical crash fix: Error boundary + complete scene data in chapters API
+- Codex entries now properly scoped to books
+- JSON export for full book backup
+- Chapter date field for diary entries
