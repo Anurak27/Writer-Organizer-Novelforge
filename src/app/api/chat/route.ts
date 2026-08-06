@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
+import { safeJsonParse } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
         });
 
         const mentioned = entries.filter((e) => {
-          const aliases: string[] = JSON.parse(e.aliases || '[]');
+          const aliases = safeJsonParse<string[]>(e.aliases, [], true);
           const allNames = [e.name, ...aliases].map((n) => n.toLowerCase());
           return mentionedNames.some((mn: string) => allNames.includes(mn.toLowerCase()));
         });

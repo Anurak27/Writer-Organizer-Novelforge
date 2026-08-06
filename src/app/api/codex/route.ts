@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
+import { safeJsonParse } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
@@ -33,16 +34,17 @@ export async function GET(request: NextRequest) {
       orderBy: [{ isPinned: 'desc' }, { name: 'asc' }],
     });
 
-    // Parse JSON strings back to arrays
+    // Parse JSON strings back to arrays — use safeJsonParse to handle corrupted data
     const parsed = entries.map((e) => ({
       ...e,
-      aliases: JSON.parse(e.aliases || '[]'),
-      tags: JSON.parse(e.tags || '[]'),
-      metadata: JSON.parse(e.metadata || '{}'),
+      aliases: safeJsonParse<string[]>(e.aliases, [], true),
+      tags: safeJsonParse<string[]>(e.tags, [], true),
+      metadata: safeJsonParse<Record<string, string>>(e.metadata, {}),
     }));
 
     return NextResponse.json(parsed);
-  } catch {
+  } catch (error) {
+    console.error('[GET /api/codex] Error:', error);
     return NextResponse.json({ error: 'Failed to fetch codex entries' }, { status: 500 });
   }
 }
@@ -59,15 +61,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Type and name are required' }, { status: 400 });
     }
 
+    // Validate and normalize aliases/tags/metadata to ensure correct types
+    const normalizedAliases = Array.isArray(aliases)
+      ? aliases.filter((a): a is string => typeof a === 'string').map(a => a.trim()).filter(Boolean)
+      : [];
+    const normalizedTags = Array.isArray(tags)
+      ? tags.filter((t): t is string => typeof t === 'string').map(t => t.trim()).filter(Boolean)
+      : [];
+    const normalizedMetadata = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? metadata
+      : {};
+
     const entry = await db.codexEntry.create({
       data: {
         bookId: bookId || null,
         type,
         name: name.trim(),
         description: description?.trim() || '',
-        aliases: JSON.stringify(aliases || []),
-        tags: JSON.stringify(tags || []),
-        metadata: JSON.stringify(metadata || {}),
+        aliases: JSON.stringify(normalizedAliases),
+        tags: JSON.stringify(normalizedTags),
+        metadata: JSON.stringify(normalizedMetadata),
         isPinned: isPinned ?? false,
         imagePath: imagePath || null,
       },
@@ -75,11 +88,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ...entry,
-      aliases: JSON.parse(entry.aliases),
-      tags: JSON.parse(entry.tags),
-      metadata: JSON.parse(entry.metadata),
+      aliases: normalizedAliases,
+      tags: normalizedTags,
+      metadata: normalizedMetadata,
     }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error('[POST /api/codex] Error:', error);
     return NextResponse.json({ error: 'Failed to create codex entry' }, { status: 500 });
   }
 }

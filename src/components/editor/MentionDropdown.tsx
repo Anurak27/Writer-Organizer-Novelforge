@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { User, MapPin, ScrollText, Gem, Search } from 'lucide-react';
+import { ensureStringArray } from '@/lib/utils';
 
 const TYPE_ICONS: Record<string, typeof User> = {
   character: User,
@@ -39,7 +40,8 @@ export function MentionDropdown({ search, onSelect, onClose }: MentionDropdownPr
     const q = search.toLowerCase();
     return entries.filter((e) => {
       const nameMatch = e.name.toLowerCase().includes(q);
-      const aliasMatch = e.aliases.some((a) => a.toLowerCase().includes(q));
+      const safeAliases = ensureStringArray(e.aliases);
+      const aliasMatch = safeAliases.some((a) => a.toLowerCase().includes(q));
       return nameMatch || aliasMatch;
     });
   }, [search, entries]);
@@ -131,9 +133,9 @@ export function MentionDropdown({ search, onSelect, onClose }: MentionDropdownPr
                 {entry.description && (
                   <p className="text-xs text-zinc-500 truncate mt-0.5">{entry.description}</p>
                 )}
-                {entry.aliases.length > 0 && (
+                {ensureStringArray(entry.aliases).length > 0 && (
                   <p className="text-[10px] text-zinc-600 mt-0.5">
-                    aka: {entry.aliases.join(', ')}
+                    aka: {ensureStringArray(entry.aliases).join(', ')}
                   </p>
                 )}
               </div>

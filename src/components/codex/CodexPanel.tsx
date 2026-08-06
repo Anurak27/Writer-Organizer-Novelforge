@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ensureStringArray, ensureRecord } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -186,8 +187,8 @@ export function CodexPanel() {
       type: entry.type,
       name: entry.name,
       description: entry.description,
-      aliases: entry.aliases.join(', '),
-      tags: entry.tags.join(', '),
+      aliases: ensureStringArray(entry.aliases).join(', '),
+      tags: ensureStringArray(entry.tags).join(', '),
       imagePath: entry.imagePath || '',
     });
     setFormImage(entry.imagePath || '');
@@ -227,10 +228,11 @@ export function CodexPanel() {
     if (filterType !== 'all' && e.type !== filterType) return false;
     if (search) {
       const q = search.toLowerCase();
+      const safeAliases = ensureStringArray(e.aliases);
       return (
         e.name.toLowerCase().includes(q) ||
         e.description.toLowerCase().includes(q) ||
-        e.aliases.some((a) => a.toLowerCase().includes(q))
+        safeAliases.some((a) => a.toLowerCase().includes(q))
       );
     }
     return true;
@@ -321,9 +323,9 @@ export function CodexPanel() {
                         </span>
                       </div>
                       <p className="text-xs text-zinc-500 line-clamp-2 mt-0.5">{entry.description}</p>
-                      {entry.aliases.length > 0 && (
+                      {ensureStringArray(entry.aliases).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {entry.aliases.map((alias) => (
+                          {ensureStringArray(entry.aliases).map((alias) => (
                             <span
                               key={alias}
                               className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500"
