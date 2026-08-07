@@ -120,3 +120,44 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── NovelForge editor styles ─────────────────────────── */
+
+/* Scene editor textarea */
+.scene-editor-textarea {
+  tab-size: 4;
+  -moz-tab-size: 4;
+  caret-color: #f59e0b;
+}
+
+.scene-editor-textarea::selection {
+  background-color: rgba(245, 158, 11, 0.2);
+}
+
+/* Scrollbar styling for the dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.5);
+}
+
+/* Smooth transitions for interactive elements */
+button, a, [role="button"] {
+  transition-property: color, background-color, border-color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Input focus glow effect */
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+}

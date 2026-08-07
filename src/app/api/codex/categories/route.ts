@@ -16,6 +16,12 @@ const BUILT_IN_TYPES = [
   { id: 'item', name: 'Item', color: 'cyan', icon: 'Gem', isBuiltin: true },
   { id: 'subplot', name: 'Subplot', color: 'rose', icon: 'GitBranch', isBuiltin: true },
   { id: 'theme', name: 'Theme', color: 'sky', icon: 'Sparkles', isBuiltin: true },
+  { id: 'style', name: 'Style Guide', color: 'pink', icon: 'Feather', isBuiltin: true },
+  { id: 'festival', name: 'Festival', color: 'orange', icon: 'Calendar', isBuiltin: true },
+  { id: 'key_element', name: 'Key Element', color: 'fuchsia', icon: 'KeyRound', isBuiltin: true },
+  { id: 'synopsis', name: 'Synopsis', color: 'indigo', icon: 'FileText', isBuiltin: true },
+  { id: 'core_message', name: 'Core Message', color: 'teal', icon: 'Target', isBuiltin: true },
+  { id: 'diary_structure', name: 'Diary Structure', color: 'lime', icon: 'BookOpen', isBuiltin: true },
 ];
 
 const CUSTOM_COLORS = [
@@ -26,6 +32,7 @@ const CUSTOM_COLORS = [
 const CUSTOM_ICONS = [
   'Bookmark', 'Palette', 'Music', 'TreePine', 'Globe',
   'GraduationCap', 'Heart', 'Flame', 'Landmark',
+  'Feather', 'Calendar', 'KeyRound', 'FileText', 'Target', 'BookOpen',
 ];
 
 function getNextColor(existing: CustomCodexCategory[]): string {

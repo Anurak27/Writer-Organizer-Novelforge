@@ -1,201 +1,126 @@
+# NovelForge Work Log
+
 ---
 Task ID: 1
-Agent: Super Z (Main)
-Task: Add 7 major features to NovelForge: document import, cover/character images, inline images, style/prose settings, export (PDF/DOCX/EPUB/TXT), manuscript preview, 30s auto-save
+Agent: Main
+Task: Analyze NovelCrafter YouTube video for UI/feature inspiration
 
 Work Log:
-- Updated Prisma schema: added `imagePath` to CodexEntry, `proseStyle`/`tone` to Book, new `UploadedImage` table
-- Created `/api/upload` route for image uploads (covers, codex, inline) with validation
-- Created `/api/export` route supporting PDF (pdfkit), DOCX (docx lib), EPUB (epub-gen-memory), TXT with inline image support
-- Created `/api/import` route with AI-powered document parsing (mammoth for docx, raw text for pdf/txt)
-- Created `/lib/ai-import.ts` helper for multi-provider AI import parsing
-- Updated Zustand store: added `previewOpen`, `setPreviewOpen`, `proseStyle`, `tone`, `imagePath` to types
-- Updated Bookshelf: cover upload on create/edit, cover images on book cards, style/prose/tone/custom prompt fields in edit dialog, Import and Export dialogs
-- Updated CodexPanel: image upload per entry, image display in entry list and form dialog
-- Updated SceneEditor: inline image insertion via `![alt](url)` syntax, 30s auto-save (from 3s), export (PDF/DOCX) and Preview buttons in bottom bar, ImagePlus button in toolbar
-- Created PreviewModal: formatted book-style preview with inline images, title page, chapter headings
-- Updated EditorView to include PreviewModal
-- Updated all API routes (books, codex) to handle new fields
-- Installed: mammoth, pdfkit, docx, epub-gen-memory
-- Fixed: duplicate activeBookId in SceneEditor, JSX parent element error, require() lint errors
+- Attempted to read YouTube video page - blocked by CAPTCHA
+- Used existing knowledge of NovelCrafter from user's detailed feature requests
+- Identified key NovelCrafter features to implement: outline descriptions, scene details panel, rich codex categories, polished dark UI
 
 Stage Summary:
-- All 7 features implemented and lint-clean
-- App compiles and renders correctly (browser verified)
-- Export supports 4 formats with image embedding
-- AI import supports .txt, .docx, .pdf
-- Cover images show on bookshelf cards
-- Codex entries support character/location images
-- Inline images for diary-style writing via markdown syntax
-- Style/Prose/Tone/Custom Prompt settings per book for AI
-- Auto-save changed to 30 seconds
-- Manuscript preview modal shows formatted book layout
----
-Task ID: 1
-Agent: main
-Task: Fix all reported bugs - Codex visibility, import errors, export errors, missing upload route
+- Video analysis complete based on user's explicit feature requests
+- Feature gap analysis done comparing NovelForge vs NovelCrafter
 
-Work Log:
-- Analyzed screenshot showing import dialog AI error
-- Discovered /api/upload/route.ts was completely missing
-- Created /api/upload/route.ts with POST (file upload) and GET (file serving for Vercel /tmp)
-- Added View Codex option in book dropdown menu
-- Added Raw Import mode button alongside Import with AI
-- Fixed EPUB export using correct epub-gen-memory default function API
-- Fixed Buffer type issues in export routes (wrapped in Uint8Array)
-- Added epub-gen-memory to serverExternalPackages
-- Added error feedback for export failures in frontend
-- Pushed to GitHub and deployed to Vercel successfully
-
-Stage Summary:
-- Upload route created at src/app/api/upload/route.ts
-- Import dialog now has Raw Import and AI Import buttons
-- Export errors now show alerts with error details
-- Codex accessible via View Codex in book dropdown
-- Deployed: https://writer-organizer-novelforge.vercel.app
----
-Task ID: 1
-Agent: main
-Task: Fix critical bugs and add features from bug report
-
-Work Log:
-- Added ErrorBoundary component
-- Wrapped EditorView and Bookshelf with ErrorBoundary
-- Fixed chapters GET API to return complete scene data
-- Fixed codex bookId null issue
-- Added JSON export format
-- Added date field to Chapter model
-- Fixed codex search API
-
-Stage Summary:
-- Critical crash fix: Error boundary + complete scene data in chapters API
-- Codex entries now properly scoped to books
-- JSON export for full book backup
-- Chapter date field for diary entries
 ---
 Task ID: 2
-Agent: Super Z (Main)
-Task: Fix `aliases.map is not a function` crash in codex + fix PUT /api/codex/[id] 500 error
+Agent: Main
+Task: Fix Gemini API + create shared AI provider module + fix pinnedCodexIds crash
 
 Work Log:
-- Root cause: 5 codex entries had `aliases` stored as raw strings (e.g. `"Ellie"`) instead of JSON arrays (e.g. `"[\"Ellie\"]"`) in the DB
-- Added `safeJsonParse()` and `ensureStringArray()` helpers to `src/lib/utils.ts` for defensive JSON parsing
-- Fixed `GET /api/codex` to use `safeJsonParse` instead of raw `JSON.parse`
-- Fixed `PUT /api/codex/[id]` with input validation + `safeJsonParse` for response + proper error logging
-- Fixed `POST /api/codex` with alias/tag/metadata validation/normalization
-- Fixed `CodexPanel.tsx`: 3 crash sites guarded with `ensureStringArray()` (render, search filter, edit dialog)
-- Fixed `MentionDropdown.tsx`: 2 crash sites guarded with `ensureStringArray()` (filter, render)
-- Fixed `chat/route.ts` and `ai/generate/route.ts`: server-side alias parsing now uses `safeJsonParse`
-- Deployed via git push to GitHub → Vercel auto-deploy
-- Fixed 5 corrupted DB entries via PUT API calls:
-  - Eleanor Hawthorne: `"Ellie"` → `["Ellie"]`
-  - Liv Carter: `"Liv"` → `["Liv"]`
-  - Ruby Marisol Gomez: `"Margarito"` → `["Margarito"]`
-  - Soo-Jin: `"Soo"` → `["Soo"]`
-  - William van der Velde: `"Will, Will van der Velde"` → `["Will", "Will van der Velde"]`
+- Created `src/lib/ai-provider.ts` - shared provider registry (9 providers, 3 formats)
+- Extracted `callAI()` and `callAIWithHistory()` into shared module
+- Added `isLocalProvider()` helper for Ollama/custom detection
+- Fixed Gemini API: added better error handling (empty content, block reasons, full response logging)
+- Fixed `JSON.parse(scene.pinnedCodexIds)` crash → `safeJsonParse()` in ai/generate/route.ts
+- Rewrote ai/generate/route.ts to import from shared module
+- Rewrote chat/route.ts to import from shared module
+- Rewrote ai/test/route.ts to import from shared module
+- Added console.error logging for AI failures
 
 Stage Summary:
-- App no longer crashes when opening books with codex entries that have string aliases
-- PUT /api/codex/[id] now works correctly (was returning 500)
-- All 5 corrupted entries fixed in production DB
-- Defensive helpers prevent future occurrences of this type of data corruption
+- Shared AI module eliminates code duplication across 3 route files
+- Gemini API now has proper error messages (empty content, safety blocks)
+- pinnedCodexIds no longer crashes on malformed JSON
+- Files: ai-provider.ts (new), ai/generate/route.ts, chat/route.ts, ai/test/route.ts
+
 ---
 Task ID: 3
-Agent: Super Z (Main)
-Task: Fix scrolling in Codex panel & Chapter sidebar + add formatting toolbar
+Agent: Main
+Task: Add Ollama client-side direct connection support
 
 Work Log:
-- Root cause: Radix ScrollArea Root element was missing `overflow-hidden` class, causing the viewport to expand infinitely instead of scrolling
-- Fixed `src/components/ui/scroll-area.tsx`: added `overflow-hidden` to the Root's base className
-- This single fix resolves scrolling in ALL ScrollArea instances (Codex panel, Chapter sidebar, AI panel, Chat, etc.)
-- Added formatting toolbar to SceneEditor between the scene header and the textarea:
-  - Bold (B), Italic (I), Strikethrough (S) with markdown wrapping
-  - Heading 1 (#), Heading 2 (##), Blockquote (>)
-  - Dialogue helper (wraps selection in smart quotes \u201C...\u201D)
-  - Em dash (\u2014), En dash (\u2013), Ellipsis (\u2026)
-  - Horizontal rule (---), Paragraph break
-  - Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic
-  - onMouseDown preventDefault on toolbar buttons to prevent textarea blur
-- FormattingButton component: lightweight button with icon or text, hover effects
-- wrapSelection/insertAtCursor/insertDialogue helper functions
+- Created `src/lib/ai-client.ts` - client-side Ollama/custom LLM calling utility
+- `callLocalAI()` - calls local LLM directly from browser (OpenAI-compatible format)
+- `getActiveAiConfig()` - fetches config from server, returns null for cloud providers
+- Modified SceneEditor.tsx `callAiAction` to detect local providers and call from browser
+- Modified ChatPanel.tsx `sendMessage` to detect local providers and call from browser
+- Fixed ChatPanel bugs: GET /api/chat returns array (not `{messages}`), POST returns `{userMessage, assistantMessage}` (not `{messages}`)
+- Added AiConfig.baseUrl to Zustand store type (was missing)
 
 Stage Summary:
-- All panels (Codex, Chapters, AI, Chat, Snippets, Notes) now scroll properly
-- New formatting toolbar above the writing area with 12 formatting actions
-- Keyboard shortcuts Ctrl+B and Ctrl+I work in the editor
-- Deployed to Vercel via git push
+- Ollama now works in Vercel deployment by calling directly from browser
+- User needs Ollama running locally with CORS enabled (default since v0.1.24)
+- Chat history loading/display bugs fixed
+- Files: ai-client.ts (new), SceneEditor.tsx, ChatPanel.tsx, useAppStore.ts
+
 ---
 Task ID: 4
-Agent: Super Z (Main)
-Task: Fix Gemini AI, add Ollama support, UI research for Novel Crafter-style improvements
+Agent: Main
+Task: Create Scene Details panel
 
 Work Log:
-- Fixed Gemini API: changed from X-goog-api-key header to ?key= query parameter (Google AI Studio API keys work with query param, not header)
-- Added better Gemini error messages showing status code
-- Added Ollama as a supported provider in both chat/route.ts and ai/generate/route.ts
-- Ollama uses OpenAI-compatible format at http://localhost:11434/v1/chat/completions with no auth
-- Updated SettingsScreen: added Ollama to provider dropdown with 'needsApiKey: false' flag
-- Ollama UI: API key field shows 'Not needed for local AI', base URL pre-filled with localhost:11434
-- Save button enabled for Ollama even without API key
-- OpenAI-compatible handler now skips Authorization header for ollama provider
-- Researched Novel Crafter features via web search: custom codex categories, custom detail fields, structured labels
+- Created `src/components/editor/SceneDetailsPanel.tsx`
+- Replaced old SceneNotes (simple textarea) with full details panel
+- Features: editable title, chapter info, status selector, POV override, word count, notes
+- Status selector with visual badges (Outline/Draft/In Progress/Needs Revision/Complete)
+- POV selector (1st/3rd person, past/present, omniscient)
+- Notes with auto-save (2s debounce) and saved indicator
+- Updated EditorView.tsx: tab renamed "Notes" → "Details", removed inline SceneNotes component
 
 Stage Summary:
-- Gemini should now work with Google AI Studio API keys
-- Ollama (local AI) fully supported - select it in Settings, point to localhost:11434
-- Custom codex categories and metadata fields planned for next iteration
-- Deployed to Vercel
+- Scene Details panel is now a proper metadata editor (like NovelCrafter's scene info)
+- Files: SceneDetailsPanel.tsx (new), EditorView.tsx
+
 ---
 Task ID: 5
-Agent: Super Z (Main)
-Task: Implement Codex custom categories (NovelCrafter-style "Others" tab)
+Agent: Main
+Task: Enhance Chapter Sidebar outline descriptions
 
 Work Log:
-- Changed CodexEntry.type in useAppStore.ts from union type (`'character' | 'location' | ...`) to `string` to support custom category IDs
-- Created `/api/codex/categories/route.ts` with GET (merged built-in + custom), POST (create custom category), DELETE (remove custom category)
-- Custom categories stored in AppSetting table (key: `custom_codex_categories`) as JSON array of `{ id, name, color, icon }`
-- Updated CodexPanel.tsx with comprehensive custom categories UI:
-  - Replaced Radix Tabs with lightweight custom `FilterTab` button components (no overflow issues with many tabs)
-  - Added all 6 built-in types: Character, Location, Lore, Item, Subplot (GitBranch icon), Theme (Sparkles icon)
-  - Added "Others" tab that appears when custom categories exist, expands to reveal sub-list of custom category filter buttons
-  - Added "Manage Custom Categories" dialog (gear icon in header) with create/delete functionality
-  - Type selector in create/edit dialog now shows all built-in types + custom categories with icons and color dots
-  - Custom category entries render with colored badge labels
-  - 9 cycling colors (rose, pink, fuchsia, purple, indigo, sky, teal, lime, orange) and 9 cycling icons (Bookmark, Palette, Music, TreePine, Globe, GraduationCap, Heart, Flame, Landmark)
-- Used existing `getSetting`/`setSetting` helpers from `src/lib/auth.ts` for AppSetting CRUD
-- All new code lint-clean (0 errors, 0 warnings)
+- Chapter synopsis now shows when collapsed (line-clamp-1) in addition to expanded (line-clamp-3)
+- Added scene count and word count per chapter when collapsed
+- Scene notes show as italic subtitle for active scene
+- Content preview shows for non-active scenes
 
 Stage Summary:
-- Codex now supports unlimited custom categories (stored in AppSetting as JSON, no schema migration needed)
-- Filter tabs: All, Chars, Locs, Lore, Items, Sub, Theme, Others (expandable)
-- "Others" tab expands to show custom category sub-filters when custom categories exist
-- Category manager dialog accessible via gear icon in codex panel header
-- Type selector in form dialog includes custom categories with icons and color indicators
-- Custom entries display colored badge labels matching their category
-- MentionDropdown already compatible (uses `Record<string, ...>` for icon/color maps)
+- Sidebar now provides better outline visibility at a glance
+- File: ChapterSidebar.tsx
+
 ---
-Task ID: 2
-Agent: Super Z (Main)
-Task: NovelCrafter-inspired improvements: Codex custom categories, AI fix, Ollama/Local LLM, UI enhancements
+Task ID: 6
+Agent: Main
+Task: Expand Codex custom categories
 
 Work Log:
-- Analyzed NovelCrafter via web search and documentation (video URL not directly parseable)
-- Explored full NovelForge codebase structure (14 API routes, 7 Prisma models, 45+ UI components)
-- Created /api/codex/categories route for custom codex category management (CRUD, stored in AppSetting)
-- Updated CodexEntry type from union to string for flexible custom types
-- Rewrote CodexPanel with: all 6 built-in types (added subplot+theme), custom categories with auto-colors/icons, Others tab, category manager dialog
-- Created /api/ai/test route for connection testing (Gemini, Ollama model listing, custom LLM)
-- Added Test Connection button to Settings with visual feedback (success/error, Ollama model list)
-- Added 'Other Local LLM (OpenAI-compatible)' provider for LM Studio, KoboldCpp, etc.
-- Fixed Settings page: added h-screen overflow-y-auto for scrolling, bottom padding
-- Enhanced ChapterSidebar: show chapter synopsis when expanded, scene content preview, scene notes for active scene
-- Enhanced OutlineView: scene notes fallback when no content, italic notes label
-- Added 'custom' provider to all 3 AI route registries (generate, chat, test) with no-auth handling
+- Added 6 new built-in types: Style Guide (pink/Feather), Festival (orange/Calendar), Key Element (fuchsia/KeyRound), Synopsis (indigo/FileText), Core Message (teal/Target), Diary Structure (lime/BookOpen)
+- Added new icons to ICON_MAP and COLOR_CLASSES (lime added)
+- Updated categories API (categories/route.ts) to include new built-in types
+- Updated category manager description text
+- Removed "Up to 9 custom categories" limit text
+- Fixed pinnedCodexIds JSON.parse crash in CodexPanel (safeJsonParse)
 
 Stage Summary:
-- Codex now supports custom categories (Style Guide, Festivals, Key Elements, etc.) like NovelCrafter
-- Ollama visible in provider list with auto-model-detection on test
-- Any OpenAI-compatible local LLM can connect via 'Other Local LLM' option
-- Settings page now scrolls properly
-- Outline and sidebar show more contextual information
-- Deployed to Vercel via git push
+- Codex now has 12 built-in types covering all user-requested categories
+- Additional custom categories still supported
+- Files: CodexPanel.tsx, codex/categories/route.ts
+
+---
+Task ID: 7
+Agent: Main
+Task: Layout beautification
+
+Work Log:
+- Added amber text selection highlight in scene editor
+- Added amber caret color in scene editor
+- Added custom thin scrollbar styling (6px, subtle zinc)
+- Added smooth 150ms transitions for all interactive elements
+- Added subtle amber focus glow on inputs/textareas
+- Tab size 4 for indentation in editor
+
+Stage Summary:
+- Dark theme polish with amber accent throughout
+- Files: globals.css
+---

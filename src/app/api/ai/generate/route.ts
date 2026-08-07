@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { safeJsonParse } from '@/lib/utils';
+import { callAI } from '@/lib/ai-provider';
 
 export async function POST(request: NextRequest) {
   if (!(await verifyAuth(request))) {
@@ -41,11 +42,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Gather pinned codex entries for this scene
+    // 2. Gather pinned codex entries for this scene (FIXED: use safeJsonParse)
     if (sceneId) {
       const scene = await db.scene.findUnique({ where: { id: sceneId } });
       if (scene) {
-        const pinnedIds: string[] = JSON.parse(scene.pinnedCodexIds || '[]');
+        const pinnedIds = safeJsonParse<string[]>(scene.pinnedCodexIds, [], false);
         if (pinnedIds.length > 0) {
           const pinned = await db.codexEntry.findMany({
             where: { id: { in: pinnedIds } },
@@ -88,7 +89,6 @@ export async function POST(request: NextRequest) {
               orderBy: { sortOrder: 'asc' },
               take: 3,
             });
-            // Use the last written scene's content as style reference (up to 1500 chars)
             for (const s of siblingScenes.reverse()) {
               if (s.content && s.content.trim().length > 100) {
                 chapterTextForStyle = s.content.slice(-1500);
@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'AI generation failed';
+    console.error('[AI Generate Error]', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -148,7 +149,6 @@ function buildSystemPrompt(
   bookMeta: { pov?: string; povTense?: string; customPrompt?: string | null; language?: string; penName?: string | null },
   styleSample: string,
 ): string {
-  // Allow user to override the entire system prompt
   if (bookMeta.customPrompt && (action === 'expand' || action === 'rewrite' || action === 'continue' || action === 'generate_scene')) {
     let custom = bookMeta.customPrompt;
     if (codexContext) {
@@ -159,7 +159,6 @@ function buildSystemPrompt(
 
   let prompt = 'You are a skilled creative writing assistant helping a novelist.';
 
-  // POV instructions
   if (bookMeta.pov) {
     const povMap: Record<string, string> = {
       first_past: 'first person past tense ("I went")',
@@ -174,12 +173,10 @@ function buildSystemPrompt(
     prompt += `\n\nPOV: Write in ${povDesc}. This is critical — maintain this point of view consistently.`;
   }
 
-  // Style emulation
   if (styleSample && styleSample.length > 100) {
     prompt += `\n\nSTYLE REFERENCE: Study the following writing sample and emulate its voice, sentence structure, vocabulary level, and prose rhythm:\n---\n${styleSample}\n---`;
   }
 
-  // Author name for personalization
   if (bookMeta.penName) {
     prompt += `\n\nThe author's pen name is ${bookMeta.penName}.`;
   }
@@ -199,109 +196,4 @@ function buildSystemPrompt(
   }
 
   return prompt;
-}
-
-// --- Provider registry ---
-
-interface ProviderDef {
-  defaultModel: string;
-  baseUrl: string;
-  format: 'openai' | 'anthropic' | 'google';
-}
-
-const PROVIDERS: Record<string, ProviderDef> = {
-  openai:      { defaultModel: 'gpt-4o-mini',               baseUrl: 'https://api.openai.com/v1/chat/completions', format: 'openai' },
-  anthropic:   { defaultModel: 'claude-sonnet-4-20250514',   baseUrl: 'https://api.anthropic.com/v1/messages', format: 'anthropic' },
-  openrouter:  { defaultModel: 'openai/gpt-4o-mini',        baseUrl: 'https://openrouter.ai/api/v1/chat/completions', format: 'openai' },
-  groq:        { defaultModel: 'llama-3.3-70b-versatile',   baseUrl: 'https://api.groq.com/openai/v1/chat/completions', format: 'openai' },
-  cerebras:    { defaultModel: 'llama-4-scout-17b-16e-instruct', baseUrl: 'https://api.cerebras.ai/v1/chat/completions', format: 'openai' },
-  nararouter:  { defaultModel: 'openai/gpt-4o-mini',       baseUrl: 'https://router.bynara.id/v1/chat/completions', format: 'openai' },
-  google:      { defaultModel: 'gemini-2.0-flash',          baseUrl: 'https://generativelanguage.googleapis.com/v1beta', format: 'google' },
-  ollama:      { defaultModel: 'llama3.1',                  baseUrl: 'http://localhost:11434/v1/chat/completions', format: 'openai' },
-  custom:     { defaultModel: 'local-model',              baseUrl: 'http://localhost:1234/v1/chat/completions', format: 'openai' },
-};
-
-async function callAI(
-  provider: string,
-  apiKey: string,
-  customBaseUrl: string | null,
-  modelName: string | null,
-  systemPrompt: string,
-  userMessage: string,
-): Promise<string> {
-  const def = PROVIDERS[provider];
-  if (!def) throw new Error(`Unknown AI provider: ${provider}. Supported: ${Object.keys(PROVIDERS).join(', ')}`);
-
-  const model = modelName || def.defaultModel;
-
-  // --- Google Gemini (native format) ---
-  if (def.format === 'google') {
-    const base = customBaseUrl || def.baseUrl;
-    const url = `${base}/models/${model}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userMessage }] }],
-        generationConfig: { maxOutputTokens: 2000, temperature: 0.8 },
-      }),
-    });
-    const data = await res.json();
-    if (data.error) {
-      const msg = data.error.message || data.error.status || JSON.stringify(data.error);
-      throw new Error(`Gemini API error: ${msg}`);
-    }
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
-
-  // --- Anthropic (native format) ---
-  if (def.format === 'anthropic') {
-    const url = customBaseUrl || def.baseUrl;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.content[0].text;
-  }
-
-  // --- OpenAI-compatible (covers openai, openrouter, groq, cerebras, nararouter, ollama, etc.) ---
-  const url = customBaseUrl || def.baseUrl;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  // Ollama doesn't require auth; all others do
-  if (provider !== 'ollama' && provider !== 'custom' && apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      max_tokens: 2000,
-      temperature: 0.8,
-    }),
-  });
-  const data = await res.json();
-  if (data.error) {
-    const errMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-    throw new Error(errMsg);
-  }
-  return data.choices[0].message.content;
 }

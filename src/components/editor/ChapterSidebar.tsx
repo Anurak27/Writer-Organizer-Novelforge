@@ -290,8 +290,19 @@ export function ChapterSidebar() {
                   <span className="text-xs text-zinc-600 font-mono w-5 shrink-0">{chIdx + 1}</span>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm text-zinc-300 truncate block">{chapter.title}</span>
-                    {chapter.synopsis && expandedChapters.has(chapter.id) && (
-                      <p className="text-[11px] text-zinc-600 leading-relaxed line-clamp-2 mt-0.5">{chapter.synopsis}</p>
+                    {expandedChapters.has(chapter.id) && (
+                    <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-3 mt-0.5 pl-[22px]">{chapter.synopsis}</p>
+                    )}
+                    {!expandedChapters.has(chapter.id) && chapter.synopsis && (
+                      <p className="text-[10px] text-zinc-600 leading-relaxed line-clamp-1 mt-0.5 pl-[22px]">{chapter.synopsis}</p>
+                    )}
+                    {chapter.scenes.length > 0 && !expandedChapters.has(chapter.id) && (
+                      <div className="flex items-center gap-1.5 mt-0.5 pl-[22px]">
+                        <span className="text-[10px] text-zinc-700">{chapter.scenes.length} scene{chapter.scenes.length > 1 ? 's' : ''}</span>
+                        {chapter.scenes.reduce((s, sc) => s + sc.wordCount, 0) > 0 && (
+                          <span className="text-[10px] text-zinc-700">· {chapter.scenes.reduce((s, sc) => s + sc.wordCount, 0).toLocaleString()}w</span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <DropdownMenu>

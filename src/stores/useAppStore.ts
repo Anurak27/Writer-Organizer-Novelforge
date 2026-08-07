@@ -98,6 +98,7 @@ export interface AiConfig {
   id: string;
   provider: string;
   apiKey: string;
+  baseUrl: string | null;
   modelName: string | null;
   isActive: boolean;
   createdAt: string;

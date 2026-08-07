@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ensureStringArray } from '@/lib/utils';
+import { ensureStringArray, safeJsonParse } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -49,25 +49,19 @@ import {
   ChevronRight,
   Settings,
   FolderPlus,
+  Feather,
+  Calendar,
+  KeyRound,
+  FileText,
+  Target,
+  BookOpen,
 } from 'lucide-react';
 
 // --- Icon registry for all icons used by categories ---
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  User,
-  MapPin,
-  ScrollText,
-  Gem,
-  GitBranch,
-  Sparkles,
-  Bookmark,
-  Palette,
-  Music,
-  TreePine,
-  Globe,
-  GraduationCap,
-  Heart,
-  Flame,
-  Landmark,
+  User, MapPin, ScrollText, Gem, GitBranch, Sparkles, Bookmark,
+  Palette, Music, TreePine, Globe, GraduationCap, Heart, Flame, Landmark,
+  Feather, Calendar, KeyRound, FileText, Target, BookOpen,
 };
 
 // --- Built-in type definitions ---
@@ -78,6 +72,12 @@ const BUILT_IN_TYPES: { id: string; label: string; shortLabel: string; color: st
   { id: 'item', label: 'Item', shortLabel: 'Items', color: 'cyan', icon: 'Gem' },
   { id: 'subplot', label: 'Subplot', shortLabel: 'Sub', color: 'rose', icon: 'GitBranch' },
   { id: 'theme', label: 'Theme', shortLabel: 'Theme', color: 'sky', icon: 'Sparkles' },
+  { id: 'style', label: 'Style Guide', shortLabel: 'Style', color: 'pink', icon: 'Feather' },
+  { id: 'festival', label: 'Festival', shortLabel: 'Fest', color: 'orange', icon: 'Calendar' },
+  { id: 'key_element', label: 'Key Element', shortLabel: 'Keys', color: 'fuchsia', icon: 'KeyRound' },
+  { id: 'synopsis', label: 'Synopsis', shortLabel: 'Syn', color: 'indigo', icon: 'FileText' },
+  { id: 'core_message', label: 'Core Message', shortLabel: 'Msg', color: 'teal', icon: 'Target' },
+  { id: 'diary_structure', label: 'Diary Structure', shortLabel: 'Diary', color: 'lime', icon: 'BookOpen' },
 ];
 
 // --- Color mapping for badge/icon styling ---
@@ -94,7 +94,6 @@ const COLOR_CLASSES: Record<string, { badge: string; icon: string; dot: string }
   indigo: { badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20', icon: 'text-indigo-400', dot: 'bg-indigo-400' },
   teal: { badge: 'bg-teal-500/10 text-teal-400 border-teal-500/20', icon: 'text-teal-400', dot: 'bg-teal-400' },
   lime: { badge: 'bg-lime-500/10 text-lime-400 border-lime-500/20', icon: 'text-lime-400', dot: 'bg-lime-400' },
-  orange: { badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20', icon: 'text-orange-400', dot: 'bg-orange-400' },
 };
 
 const DEFAULT_COLOR = COLOR_CLASSES.violet;
@@ -154,9 +153,7 @@ export function CodexPanel() {
 
   // Scene-level codex pinning
   const pinnedIds: string[] = activeScene?.pinnedCodexIds
-    ? (typeof activeScene.pinnedCodexIds === 'string'
-        ? JSON.parse(activeScene.pinnedCodexIds)
-        : activeScene.pinnedCodexIds)
+    ? safeJsonParse<string[]>(activeScene.pinnedCodexIds, [], false)
     : [];
 
   const isPinnedToScene = (entryId: string) => pinnedIds.includes(entryId);
@@ -753,7 +750,7 @@ export function CodexPanel() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-xs text-zinc-500">
-              Create custom codex types like &quot;Style Guide&quot;, &quot;Festivals&quot;, &quot;Key Elements&quot;, etc. Built-in types (Character, Location, Lore, Item, Subplot, Theme) cannot be removed.
+              Create custom codex types. Built-in types (Character, Location, Lore, Item, Subplot, Theme, Style Guide, Festival, Key Element, Synopsis, Core Message, Diary Structure) cannot be removed.
             </p>
 
             {/* Existing custom categories */}
@@ -821,7 +818,7 @@ export function CodexPanel() {
                 </Button>
               </div>
               <p className="text-[10px] text-zinc-600">
-                Color and icon are assigned automatically. Up to 9 custom categories.
+                Color and icon are assigned automatically. Create as many custom categories as you need.
               </p>
             </div>
 

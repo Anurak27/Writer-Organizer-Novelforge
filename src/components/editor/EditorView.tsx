@@ -10,6 +10,7 @@ import { CodexPanel } from '@/components/codex/CodexPanel';
 import { AiPanel } from '@/components/ai/AiPanel';
 import { ChatPanel } from '@/components/ai/ChatPanel';
 import { SnippetsPanel } from '@/components/snippets/SnippetsPanel';
+import { SceneDetailsPanel } from './SceneDetailsPanel';
 import { PreviewModal } from './PreviewModal';
 import {
   ArrowLeft,
@@ -23,7 +24,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function EditorView() {
   const setView = useAppStore((s) => s.setView);
@@ -210,7 +211,7 @@ export function EditorView() {
                     className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
                     <StickyNote className="w-3.5 h-3.5 mr-1" />
-                    Notes
+                    Details
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="codex" className="flex-1 mt-0 overflow-hidden">
@@ -226,7 +227,7 @@ export function EditorView() {
                   <SnippetsPanel />
                 </TabsContent>
                 <TabsContent value="notes" className="flex-1 mt-0 overflow-hidden">
-                  <SceneNotes />
+                  <SceneDetailsPanel />
                 </TabsContent>
               </Tabs>
             </div>
@@ -236,68 +237,6 @@ export function EditorView() {
 
       {/* Preview Modal */}
       <PreviewModal />
-    </div>
-  );
-}
-
-function SceneNotes() {
-  const activeScene = useAppStore((s) => s.activeScene);
-  const token = useAppStore((s) => s.token);
-  const setActiveScene = useAppStore((s) => s.setActiveScene);
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const saveNotes = async (value: string) => {
-    if (!activeScene?.id || !token) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/scenes/${activeScene.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ notes: value }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setActiveScene(data);
-      }
-    } catch {
-      // silent
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setNotes(val);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => saveNotes(val), 2000);
-  };
-
-  if (!activeScene) {
-    return (
-      <div className="p-4 text-center text-zinc-600 text-sm">
-        Select a scene to see its notes.
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-zinc-800/50 flex items-center justify-between shrink-0">
-        <h3 className="text-sm font-medium text-zinc-300">Scene Notes</h3>
-        {saving && <span className="text-xs text-zinc-600">Saving...</span>}
-      </div>
-      <textarea
-        value={notes}
-        onChange={handleChange}
-        placeholder="Jot down ideas, reminders, or outlines for this scene. Notes are excluded from AI context."
-        className="flex-1 bg-transparent text-zinc-300 text-sm p-4 resize-none focus:outline-none placeholder:text-zinc-700"
-      />
     </div>
   );
 }

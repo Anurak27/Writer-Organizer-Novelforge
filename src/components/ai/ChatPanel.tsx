@@ -18,6 +18,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { MessageSquare, Trash2, Send } from 'lucide-react';
+import { getActiveAiConfig, callLocalAI } from '@/lib/ai-client';
 
 const SUGGESTION_CHIPS = [
   'Help me develop my protagonist',
@@ -56,6 +57,7 @@ export function ChatPanel() {
   const activeBookId = useAppStore((s) => s.activeBookId);
   const chatMessages = useAppStore((s) => s.chatMessages);
   const setChatMessages = useAppStore((s) => s.setChatMessages);
+  const addChatMessage = useAppStore((s) => s.addChatMessage);
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -74,16 +76,13 @@ export function ChatPanel() {
       try {
         const res = await fetch(
           `/api/chat?bookId=${activeBookId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled && Array.isArray(data.messages)) {
-          setChatMessages(data.messages);
+        // GET /api/chat returns an array directly
+        if (!cancelled && Array.isArray(data)) {
+          setChatMessages(data);
         }
       } catch {
         // Silently fail on network errors
@@ -93,9 +92,7 @@ export function ChatPanel() {
     fetchHistory();
     setHasMounted(true);
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [token, activeBookId, setChatMessages]);
 
   // Auto-scroll to bottom when messages change
@@ -113,23 +110,60 @@ export function ChatPanel() {
       setIsLoading(true);
 
       try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            action: 'send',
-            message: trimmed,
+        // Check if we should use client-side local AI
+        const localConfig = await getActiveAiConfig(token);
+
+        if (localConfig) {
+          // Client-side local AI (Ollama/custom)
+          // Save user message locally first
+          const userMsg: ChatMessage = {
+            id: `temp-user-${Date.now()}`,
             bookId: activeBookId,
-          }),
-        });
+            role: 'user',
+            content: trimmed,
+            createdAt: new Date().toISOString(),
+          };
+          addChatMessage(userMsg);
 
-        const data = await res.json();
+          const systemPrompt = 'You are a creative writing sparring partner helping a novelist brainstorm ideas, fix plot holes, develop characters, and explore story directions. Be conversational, insightful, and ask follow-up questions. Keep responses concise (2-4 paragraphs max).';
 
-        if (res.ok && Array.isArray(data.messages)) {
-          setChatMessages(data.messages);
+          const history = chatMessages
+            .filter((m) => m.role !== 'system')
+            .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+          const reply = await callLocalAI(localConfig, systemPrompt, trimmed, history);
+
+          const assistantMsg: ChatMessage = {
+            id: `temp-asst-${Date.now()}`,
+            bookId: activeBookId,
+            role: 'assistant',
+            content: reply,
+            createdAt: new Date().toISOString(),
+          };
+          addChatMessage(assistantMsg);
+        } else {
+          // Server-side AI (cloud providers)
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              action: 'send',
+              content: trimmed,
+              bookId: activeBookId,
+            }),
+          });
+
+          const data = await res.json();
+
+          if (res.ok) {
+            // POST returns { userMessage, assistantMessage }
+            if (data.userMessage && data.assistantMessage) {
+              setChatMessages([...chatMessages, data.userMessage, data.assistantMessage]);
+            }
+          }
         }
       } catch {
         // Silently fail on network errors
@@ -137,7 +171,7 @@ export function ChatPanel() {
         setIsLoading(false);
       }
     },
-    [token, activeBookId, isLoading, setChatMessages]
+    [token, activeBookId, isLoading, setChatMessages, addChatMessage, chatMessages]
   );
 
   const handleClear = useCallback(async () => {
@@ -151,10 +185,7 @@ export function ChatPanel() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          action: 'clear',
-          bookId: activeBookId,
-        }),
+        body: JSON.stringify({ action: 'clear', bookId: activeBookId }),
       });
 
       if (res.ok) {
@@ -182,7 +213,6 @@ export function ChatPanel() {
 
   return (
     <div className="h-full flex flex-col bg-zinc-950">
-      {/* Header */}
       <div className="px-4 py-3 border-b border-zinc-800/50 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -192,50 +222,32 @@ export function ChatPanel() {
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-zinc-500 hover:text-zinc-300"
-                disabled={isLoading}
-              >
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" disabled={isLoading}>
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent className="bg-zinc-900 border-zinc-800">
               <AlertDialogHeader>
-                <AlertDialogTitle className="text-zinc-100">
-                  Clear chat history?
-                </AlertDialogTitle>
+                <AlertDialogTitle className="text-zinc-100">Clear chat history?</AlertDialogTitle>
                 <AlertDialogDescription className="text-zinc-400">
-                  This will permanently delete all messages in this
-                  conversation. This action cannot be undone.
+                  This will permanently delete all messages in this conversation.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100">
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleClear}
-                  className="bg-red-600 hover:bg-red-500 text-white"
-                >
-                  Clear
-                </AlertDialogAction>
+                <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100">Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClear} className="bg-red-600 hover:bg-red-500 text-white">Clear</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </div>
       </div>
 
-      {/* Message list */}
       <ScrollArea className="flex-1" ref={scrollViewportRef}>
         <div className="flex flex-col min-h-full">
           {isEmpty ? (
             <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 gap-4">
               <MessageSquare className="w-10 h-10 text-zinc-700" />
-              <p className="text-sm text-zinc-500 text-center">
-                Start a conversation to brainstorm your story
-              </p>
+              <p className="text-sm text-zinc-500 text-center">Start a conversation to brainstorm your story</p>
               <div className="flex flex-col gap-2 w-full max-w-xs">
                 {SUGGESTION_CHIPS.map((chip) => (
                   <button
@@ -251,38 +263,24 @@ export function ChatPanel() {
           ) : (
             <div className="py-3 px-4 space-y-3">
               {bookMessages.map((msg: ChatMessage) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${
-                    msg.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-3 py-2 border ${
-                      msg.role === 'user'
-                        ? 'bg-amber-600/20 border-amber-600/30 text-zinc-200 rounded-tr-sm'
-                        : 'bg-zinc-900 border-zinc-800 text-zinc-300 rounded-tl-sm'
-                    }`}
-                  >
-                    <p className="text-sm font-sans whitespace-pre-wrap leading-relaxed break-words">
-                      {msg.content}
-                    </p>
-                    <p className="text-[10px] text-zinc-600 mt-1">
-                      {formatTime(msg.createdAt)}
-                    </p>
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] rounded-lg px-3 py-2 border ${
+                    msg.role === 'user'
+                      ? 'bg-amber-600/20 border-amber-600/30 text-zinc-200 rounded-tr-sm'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-300 rounded-tl-sm'
+                  }`}>
+                    <p className="text-sm font-sans whitespace-pre-wrap leading-relaxed break-words">{msg.content}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">{formatTime(msg.createdAt)}</p>
                   </div>
                 </div>
               ))}
-
               {isLoading && <TypingIndicator />}
-
               <div ref={bottomRef} />
             </div>
           )}
         </div>
       </ScrollArea>
 
-      {/* Input area */}
       <div className="px-4 py-3 border-t border-zinc-800/50 shrink-0">
         <div className="flex items-center gap-2">
           <Input

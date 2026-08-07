@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { safeJsonParse } from '@/lib/utils';
+import { callAIWithHistory } from '@/lib/ai-provider';
 
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
@@ -134,7 +135,6 @@ export async function POST(request: NextRequest) {
         orderBy: { createdAt: 'asc' },
       });
 
-      // Build conversation messages for AI (exclude system messages)
       const conversationMessages = history
         .filter((m) => m.role !== 'system')
         .map((m) => ({
@@ -142,7 +142,6 @@ export async function POST(request: NextRequest) {
           content: m.content,
         }));
 
-      // Build system prompt
       let systemPrompt =
         'You are a creative writing sparring partner helping a novelist brainstorm ideas, fix plot holes, develop characters, and explore story directions. Be conversational, insightful, and ask follow-up questions. Keep responses concise (2-4 paragraphs max).';
 
@@ -152,7 +151,6 @@ export async function POST(request: NextRequest) {
 
       systemPrompt += outlineContext;
 
-      // Call AI with full conversation history
       const aiResponse = await callAIWithHistory(
         config.provider,
         config.apiKey,
@@ -162,7 +160,6 @@ export async function POST(request: NextRequest) {
         conversationMessages,
       );
 
-      // Save assistant message
       const assistantMessage = await db.chatMessage.create({
         data: {
           role: 'assistant',
@@ -177,155 +174,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action. Use "send" or "clear".' }, { status: 400 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Chat operation failed';
+    console.error('[AI Chat Error]', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-// --- Provider registry (same as ai/generate) ---
-
-interface ProviderDef {
-  defaultModel: string;
-  baseUrl: string;
-  format: 'openai' | 'anthropic' | 'google';
-}
-
-const PROVIDERS: Record<string, ProviderDef> = {
-  openai: { defaultModel: 'gpt-4o-mini', baseUrl: 'https://api.openai.com/v1/chat/completions', format: 'openai' },
-  anthropic: {
-    defaultModel: 'claude-sonnet-4-20250514',
-    baseUrl: 'https://api.anthropic.com/v1/messages',
-    format: 'anthropic',
-  },
-  openrouter: {
-    defaultModel: 'openai/gpt-4o-mini',
-    baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    format: 'openai',
-  },
-  groq: {
-    defaultModel: 'llama-3.3-70b-versatile',
-    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    format: 'openai',
-  },
-  cerebras: {
-    defaultModel: 'llama-4-scout-17b-16e-instruct',
-    baseUrl: 'https://api.cerebras.ai/v1/chat/completions',
-    format: 'openai',
-  },
-  nararouter: {
-    defaultModel: 'openai/gpt-4o-mini',
-    baseUrl: 'https://router.bynara.id/v1/chat/completions',
-    format: 'openai',
-  },
-  google: {
-    defaultModel: 'gemini-2.0-flash',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    format: 'google',
-  },
-  ollama: {
-    defaultModel: 'llama3.1',
-    baseUrl: 'http://localhost:11434/v1/chat/completions',
-    format: 'openai',
-  },
-  custom: {
-    defaultModel: 'local-model',
-    baseUrl: 'http://localhost:1234/v1/chat/completions',
-    format: 'openai',
-  },
-};
-
-// --- Multi-turn AI call ---
-
-async function callAIWithHistory(
-  provider: string,
-  apiKey: string,
-  customBaseUrl: string | null,
-  modelName: string | null,
-  systemPrompt: string,
-  messages: { role: 'user' | 'assistant'; content: string }[],
-): Promise<string> {
-  const def = PROVIDERS[provider];
-  if (!def) {
-    throw new Error(`Unknown AI provider: ${provider}. Supported: ${Object.keys(PROVIDERS).join(', ')}`);
-  }
-
-  const model = modelName || def.defaultModel;
-
-  // --- Google Gemini (native format) ---
-  if (def.format === 'google') {
-    const base = customBaseUrl || def.baseUrl;
-    const url = `${base}/models/${model}:generateContent?key=${apiKey}`;
-    const contents = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents,
-        generationConfig: {
-          maxOutputTokens: 2000,
-          temperature: 0.8,
-        },
-      }),
-    });
-    const data = await res.json();
-    if (data.error) {
-      const msg = data.error.message || data.error.status || JSON.stringify(data.error);
-      throw new Error(`Gemini API error: ${msg}`);
-    }
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
-
-  // --- Anthropic (native format) ---
-  if (def.format === 'anthropic') {
-    const url = customBaseUrl || def.baseUrl;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages,
-      }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.content[0].text;
-  }
-
-  // --- OpenAI-compatible ---
-  const url = customBaseUrl || def.baseUrl;
-  const apiMessages = [
-    { role: 'system' as const, content: systemPrompt },
-    ...messages.map((m) => ({ role: m.role, content: m.content })),
-  ];
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (provider !== 'ollama' && provider !== 'custom' && apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: apiMessages,
-      max_tokens: 2000,
-      temperature: 0.8,
-    }),
-  });
-  const data = await res.json();
-  if (data.error) {
-    const errMsg =
-      data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-    throw new Error(errMsg);
-  }
-  return data.choices[0].message.content;
 }

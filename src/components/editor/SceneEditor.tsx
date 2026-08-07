@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Save, Clock, Sparkles, PanelRight, BookOpen, ListTree, MessageSquare, Target, ImagePlus, Download, Eye, Bold, Italic, Heading1, Heading2, Quote, Minus, Pilcrow, Type } from 'lucide-react';
 import { MentionDropdown, extractMentions } from './MentionDropdown';
 import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
+import { getActiveAiConfig, callLocalAI } from '@/lib/ai-client';
 
 export function SceneEditor() {
   const activeSceneId = useAppStore((s) => s.activeSceneId);
@@ -92,43 +93,74 @@ export function SceneEditor() {
         const mentionedNames = activeScene?.content
           ? extractMentions(activeScene.content)
           : [];
-        const body: Record<string, unknown> = {
-          action,
-          text: text || activeScene?.content || '',
-          sceneContent: activeScene?.content || '',
-          mentionedNames,
-          bookId: activeBookId,
-          sceneId: activeSceneId,
-        };
-        const res = await fetch('/api/ai/generate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          console.error(data.error);
-          return;
+
+        // Build prompt parts for client-side local AI
+        const sceneText = text || activeScene?.content || '';
+        const fullSceneContent = activeScene?.content || '';
+        let userMessage = '';
+        if (action === 'continue') {
+          userMessage = `Continue writing from the following text. Pick up exactly where it leaves off — do not repeat. Maintain the same voice, tone, and pacing:\n\n${fullSceneContent}`;
+        } else if (action === 'summarize') {
+          userMessage = `Write a concise 2-3 sentence summary of this scene:\n\n${fullSceneContent}`;
+        } else if (action === 'expand') {
+          userMessage = `Expand the following passage with more detail, sensory description, and emotional depth:\n\n${sceneText}`;
+        } else if (action === 'rewrite') {
+          userMessage = `Rewrite the following passage to improve flow, clarity, and prose quality:\n\n${sceneText}`;
+        } else if (action === 'shorten') {
+          userMessage = `Condense the following passage to be more concise:\n\n${sceneText}`;
+        } else {
+          userMessage = sceneText;
         }
+
+        const systemPrompt = 'You are a skilled creative writing assistant helping a novelist. Respond only with prose text. Do not include meta-commentary, explanations, or markdown code blocks.';
+
+        let result = '';
+
+        // Check if we should use client-side local AI (Ollama/custom)
+        const localConfig = await getActiveAiConfig(token);
+        if (localConfig) {
+          // Call local LLM directly from browser
+          result = await callLocalAI(localConfig, systemPrompt, userMessage);
+        } else {
+          // Call server-side API route (for cloud providers)
+          const body: Record<string, unknown> = {
+            action,
+            text: sceneText,
+            sceneContent: fullSceneContent,
+            mentionedNames,
+            bookId: activeBookId,
+            sceneId: activeSceneId,
+          };
+          const res = await fetch('/api/ai/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            console.error(data.error);
+            return;
+          }
+          result = data.result;
+        }
+
         if (action === 'summarize') {
-          // Save summary as scene notes
           await fetch(`/api/scenes/${activeSceneId}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ notes: data.result }),
+            body: JSON.stringify({ notes: result }),
           });
-          const updated = { ...activeScene!, notes: data.result };
+          const updated = { ...activeScene!, notes: result };
           setActiveScene(updated);
         } else {
-          // Insert into editor
           window.dispatchEvent(
-            new CustomEvent('ai-insert-text', { detail: data.result })
+            new CustomEvent('ai-insert-text', { detail: result })
           );
         }
       } catch (err) {
