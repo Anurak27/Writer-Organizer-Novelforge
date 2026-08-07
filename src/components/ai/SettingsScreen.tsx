@@ -23,7 +23,8 @@ const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: str
   google:      { label: 'Google AI Studio', defaultModel: 'gemini-2.0-flash',                     hint: 'aistudio.google.com/apikey',            needsBaseUrl: false },
   openai:      { label: 'OpenAI',           defaultModel: 'gpt-4o-mini',                          hint: 'platform.openai.com',                   needsBaseUrl: false },
   anthropic:   { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-4-20250514',         hint: 'console.anthropic.com',                 needsBaseUrl: false },
-  ollama:      { label: 'Ollama (Local AI)', defaultModel: 'llama3.1',                              hint: 'ollama.com — install & run Ollama locally, then pull a model (e.g. ollama pull llama3.1)', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
+  ollama:      { label: 'Ollama (Local AI)', defaultModel: 'llama3.1',                              hint: 'Install Ollama from ollama.com, then run: ollama pull llama3.1', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
+  custom:     { label: 'Other Local LLM (OpenAI-compatible)', defaultModel: '',                                     hint: 'For LM Studio, KoboldCpp, text-generation-webui, or any OpenAI-compatible server', defaultBaseUrl: 'http://localhost:1234/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
 };
 
 export function SettingsScreen() {
@@ -97,9 +98,9 @@ export function SettingsScreen() {
 
   const handleSave = async () => {
     const provDef = PROVIDERS[provider];
-    // Ollama doesn't need an API key, just needs baseUrl
-    if (!provDef?.needsApiKey && !apiKey.trim() && !baseUrl.trim()) {
-      setError('Ollama needs a base URL. Default: http://localhost:11434');
+    // Local providers don't need an API key, just need baseUrl
+    if (provDef?.needsApiKey === false && !baseUrl.trim()) {
+      setError('Please enter a Base URL for your local LLM server.');
       return;
     }
     if (provDef?.needsApiKey !== false && !apiKey.trim()) return;
@@ -281,7 +282,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="h-screen bg-zinc-950 overflow-y-auto">
       <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -417,11 +418,14 @@ export function SettingsScreen() {
                   Base URL
                 </label>
                 <Input
-                  placeholder={PROVIDERS[provider]?.defaultModel || 'http://localhost:11434'}
+                  placeholder={PROVIDERS[provider]?.defaultBaseUrl || 'http://localhost:11434/v1/chat/completions'}
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono text-sm"
                 />
+                <p className="text-xs text-zinc-600 mt-1">
+                  {PROVIDERS[provider]?.hint}
+                </p>
               </div>
             )}
 
@@ -569,6 +573,7 @@ export function SettingsScreen() {
             The AI features use your own API keys and your data is never sent to any third-party service other than your chosen AI provider.
           </p>
         </section>
+        <div className="h-12" />
       </main>
     </div>
   );

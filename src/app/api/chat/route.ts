@@ -226,6 +226,11 @@ const PROVIDERS: Record<string, ProviderDef> = {
     baseUrl: 'http://localhost:11434/v1/chat/completions',
     format: 'openai',
   },
+  custom: {
+    defaultModel: 'local-model',
+    baseUrl: 'http://localhost:1234/v1/chat/completions',
+    format: 'openai',
+  },
 };
 
 // --- Multi-turn AI call ---
@@ -303,7 +308,7 @@ async function callAIWithHistory(
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (provider !== 'ollama' && apiKey) {
+  if (provider !== 'ollama' && provider !== 'custom' && apiKey) {
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
   const res = await fetch(url, {

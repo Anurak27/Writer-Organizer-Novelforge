@@ -218,6 +218,7 @@ const PROVIDERS: Record<string, ProviderDef> = {
   nararouter:  { defaultModel: 'openai/gpt-4o-mini',       baseUrl: 'https://router.bynara.id/v1/chat/completions', format: 'openai' },
   google:      { defaultModel: 'gemini-2.0-flash',          baseUrl: 'https://generativelanguage.googleapis.com/v1beta', format: 'google' },
   ollama:      { defaultModel: 'llama3.1',                  baseUrl: 'http://localhost:11434/v1/chat/completions', format: 'openai' },
+  custom:     { defaultModel: 'local-model',              baseUrl: 'http://localhost:1234/v1/chat/completions', format: 'openai' },
 };
 
 async function callAI(
@@ -281,7 +282,7 @@ async function callAI(
   const url = customBaseUrl || def.baseUrl;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   // Ollama doesn't require auth; all others do
-  if (provider !== 'ollama' && apiKey) {
+  if (provider !== 'ollama' && provider !== 'custom' && apiKey) {
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
   const res = await fetch(url, {
