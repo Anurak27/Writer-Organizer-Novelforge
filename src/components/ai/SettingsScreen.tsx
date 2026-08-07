@@ -147,12 +147,134 @@ export function SettingsScreen() {
     setTesting(true);
     setTestResult(null);
     setError('');
+
+    const testBaseUrl = (provDef?.needsBaseUrl ? (baseUrl.trim() || provDef.defaultBaseUrl) : baseUrl.trim()) || null;
+    const testModel = modelName.trim() || provDef?.defaultModel || '';
+    const testApiKey = provDef?.needsApiKey === false ? 'no-key-needed' : apiKey.trim();
+
+    // --- For local providers (Ollama, Ollama Native, Custom), test DIRECTLY from browser ---
+    if (provDef?.needsApiKey === false && testBaseUrl) {
+      try {
+        // Derive the Ollama base URL
+        const localBase = testBaseUrl
+          .replace('/v1/chat/completions', '')
+          .replace('/api/generate', '');
+
+        if (provider === 'ollama' || provider === 'ollama_native') {
+          // Step 1: Check if Ollama is running by listing tags
+          const listRes = await fetch(`${localBase}/api/tags`, {
+            signal: AbortSignal.timeout(5000),
+          });
+          if (!listRes.ok) {
+            setTestResult({
+              success: false,
+              message: `Cannot reach Ollama at ${localBase}. Make sure Ollama is running (open terminal → ollama serve).`,
+            });
+            setTesting(false);
+            return;
+          }
+          const listData = await listRes.json();
+          const models: string[] = (listData.models || []).map((m: { name: string }) => m.name);
+          if (models.length === 0) {
+            setTestResult({
+              success: false,
+              message: 'Ollama is running but has no models installed. Run: ollama pull llama3.1',
+            });
+            setTesting(false);
+            return;
+          }
+
+          // Step 2: Try actual generation
+          const modelToTest = models.find((m: string) => m.startsWith(testModel)) || models[0];
+          let reply = '';
+          let mode = '';
+
+          if (provider === 'ollama_native') {
+            mode = 'native';
+            const genRes = await fetch(`${localBase}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: modelToTest, prompt: 'Say hello', stream: false, options: { num_predict: 20 } }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!genRes.ok) {
+              const t = await genRes.text();
+              setTestResult({ success: false, message: `Ollama native test failed (${genRes.status}): ${t.slice(0, 200)}` });
+              setTesting(false);
+              return;
+            }
+            const genData = await genRes.json();
+            reply = genData.response || '';
+          } else {
+            // Try OpenAI-compatible first, fallback to native
+            const genRes = await fetch(testBaseUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: modelToTest, messages: [{ role: 'user', content: 'Say hello' }], max_tokens: 20, temperature: 0 }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (genRes.ok) {
+              mode = 'OpenAI-compatible';
+              const genData = await genRes.json();
+              reply = genData.choices?.[0]?.message?.content || '';
+            } else {
+              // Fallback to native
+              mode = 'native (fallback)';
+              const nativeRes = await fetch(`${localBase}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: modelToTest, prompt: 'Say hello', stream: false, options: { num_predict: 20 } }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (!nativeRes.ok) {
+                setTestResult({ success: false, message: `Both OpenAI and native modes failed.` });
+                setTesting(false);
+                return;
+              }
+              const nativeData = await nativeRes.json();
+              reply = nativeData.response || '';
+            }
+          }
+
+          setTestResult({ success: true, message: `Connected to Ollama (${mode} mode). Reply: "${reply.slice(0, 60)}"`, models });
+          // Auto-fill model name
+          if (!modelName.trim()) {
+            setModelName(models[0].split(':').shift() || models[0]);
+          }
+        } else {
+          // Custom local LLM
+          const genRes = await fetch(testBaseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: testModel || 'local-model', messages: [{ role: 'user', content: 'Say hello' }], max_tokens: 20, temperature: 0 }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!genRes.ok) {
+            const t = await genRes.text();
+            setTestResult({ success: false, message: `Connection failed (${genRes.status}): ${t.slice(0, 200)}` });
+            setTesting(false);
+            return;
+          }
+          const genData = await genRes.json();
+          const reply = genData.choices?.[0]?.message?.content || '';
+          setTestResult({ success: true, message: `Connected! Reply: "${reply.slice(0, 60)}"` });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        setTestResult({ success: false, message: `Cannot reach local AI: ${msg}` });
+      } finally {
+        setTesting(false);
+      }
+      return;
+    }
+
+    // --- Cloud providers: test via server ---
     try {
       const body: Record<string, unknown> = {
         provider,
-        apiKey: provDef?.needsApiKey === false ? 'no-key-needed' : apiKey.trim(),
+        apiKey: testApiKey,
         modelName: modelName.trim() || null,
-        baseUrl: (provDef?.needsBaseUrl ? (baseUrl.trim() || provDef.defaultBaseUrl) : baseUrl.trim()) || null,
+        baseUrl: testBaseUrl,
       };
       const res = await fetch('/api/ai/test', {
         method: 'POST',
@@ -162,19 +284,24 @@ export function SettingsScreen() {
         },
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Server returned an error.' }));
+        setTestResult({ success: false, message: data.error || `Server error (${res.status})` });
+        setTesting(false);
+        return;
+      }
       const data = await res.json();
       setTestResult({
         success: data.success || false,
         message: data.error || data.message || 'Test completed',
         models: data.models || undefined,
       });
-      // If Ollama test succeeded and found models, auto-fill the first one
       if (data.success && data.models?.length > 0 && !modelName.trim()) {
-        // Extract just the model name (e.g., "llama3.1:latest" -> "llama3.1")
         setModelName(data.models[0].split(':').shift() || data.models[0]);
       }
-    } catch {
-      setTestResult({ success: false, message: 'Network error — could not reach the test endpoint.' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setTestResult({ success: false, message: `Network error: ${msg}` });
     } finally {
       setTesting(false);
     }
@@ -427,6 +554,11 @@ export function SettingsScreen() {
                 <p className="text-xs text-zinc-600 mt-1">
                   {PROVIDERS[provider]?.hint}
                 </p>
+                {(provider === 'ollama' || provider === 'ollama_native') && (
+                  <p className="text-[10px] text-amber-500/70 mt-1">
+                    OLLAMA_CORS_ALLOW_ORIGIN=* environment variable may be needed for browser access.
+                  </p>
+                )}
               </div>
             )}
 
