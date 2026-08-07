@@ -124,3 +124,24 @@ Stage Summary:
 - New formatting toolbar above the writing area with 12 formatting actions
 - Keyboard shortcuts Ctrl+B and Ctrl+I work in the editor
 - Deployed to Vercel via git push
+---
+Task ID: 4
+Agent: Super Z (Main)
+Task: Fix Gemini AI, add Ollama support, UI research for Novel Crafter-style improvements
+
+Work Log:
+- Fixed Gemini API: changed from X-goog-api-key header to ?key= query parameter (Google AI Studio API keys work with query param, not header)
+- Added better Gemini error messages showing status code
+- Added Ollama as a supported provider in both chat/route.ts and ai/generate/route.ts
+- Ollama uses OpenAI-compatible format at http://localhost:11434/v1/chat/completions with no auth
+- Updated SettingsScreen: added Ollama to provider dropdown with 'needsApiKey: false' flag
+- Ollama UI: API key field shows 'Not needed for local AI', base URL pre-filled with localhost:11434
+- Save button enabled for Ollama even without API key
+- OpenAI-compatible handler now skips Authorization header for ollama provider
+- Researched Novel Crafter features via web search: custom codex categories, custom detail fields, structured labels
+
+Stage Summary:
+- Gemini should now work with Google AI Studio API keys
+- Ollama (local AI) fully supported - select it in Settings, point to localhost:11434
+- Custom codex categories and metadata fields planned for next iteration
+- Deployed to Vercel
