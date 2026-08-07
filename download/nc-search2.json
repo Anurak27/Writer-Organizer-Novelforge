@@ -1,73 +1,46 @@
 [
   {
-    "url": "https://www.novelcrafter.com/help/docs/codex/codex-categories",
-    "name": "Codex Categories",
-    "snippet": "Mar 20, 2026 — How to make a custom category · In the Codex side panel, click on the cog icon · Select Custom Categories. Select custom categories · Select + New.\nMar 20, 2026 — How to make a custom category · In the Codex side panel, click on the cog icon · Select Custom Categories. Select custom categories · Select + New. Read more\nMar 20, 2026 — Custom categories are a way to group related Codex entries . Custom categories can be shared across items in a series, but not across unrelated  ...",
+    "url": "https://www.novelcrafter.com/help/docs/codex/anatomy-codex-entry",
+    "name": "Anatomy of a Codex Entry",
+    "snippet": "Mar 20, 2026 — These tags can be used to group codex entries into categories , to mark roles in stories, and for other organizational aspects.\nMar 20, 2026 — These tags can be used to group codex entries into categories , to mark roles in stories, and for other organizational aspects. entries into  ...",
     "host_name": "www.novelcrafter.com",
     "rank": 0,
     "date": "Mar 20, 2026",
     "favicon": ""
   },
   {
-    "url": "https://www.novelcrafter.com/courses/ultimate-beginners-guide/structuring-your-codex-with-custom-details",
-    "name": "Structuring Your Codex with Custom Details",
-    "snippet": "What are Codex Details? · Tags are labels for you to filter and categorize entries . They are for your reference only. · Details are structured information boxes.\nHow to Create a Custom Detail · Line: A single line of text. Perfect for an “Occupation” or a “Story Role” · Text: A larger text box for multiple paragraphs. Read more",
-    "host_name": "www.novelcrafter.com",
-    "rank": 1,
-    "date": "",
-    "favicon": ""
-  },
-  {
     "url": "https://www.youtube.com/watch?v=wrF6p321lJg",
-    "name": "Tips & Tricks for using the Codex in Novelcrafter - Novelcrafter",
+    "name": "Tips & Tricks for using the Codex in Novelcrafter",
     "snippet": "Using a genre codex entry can really help kind of create a consortium of what makes your story tick and what your readers expect of you.",
     "host_name": "www.youtube.com",
-    "rank": 2,
+    "rank": 1,
     "date": "",
     "favicon": ""
   },
   {
     "url": "https://www.novelcrafter.com/courses/codex-cookbook/effective-style-entries",
     "name": "Making an effective style guide Codex entry",
-    "snippet": "Whether you're writing yourself or working with AI assistance, a style guide serves as your reference for maintaining a consistent voice throughout your story.",
+    "snippet": "A well-crafted style guide in your Codex helps maintain consistency in your prose . Include key components, such as: Narrative voice preferences Description  ...\nA well-crafted style guide in your Codex help s maintain consistency in your prose. a style guide serves as your reference",
     "host_name": "www.novelcrafter.com",
-    "rank": 3,
-    "date": "",
-    "favicon": ""
-  },
-  {
-    "url": "https://www.novelcrafter.com/help/docs/codex/anatomy-codex-entry",
-    "name": "Anatomy of a Codex Entry",
-    "snippet": "Mar 20, 2026 — Grouping Entries with Codex Categories . Take control of your growing Codex by organizing entries into custom groups and categories . Learning ...\nMar 20, 2026 — Grouping Entries with Codex Categories . Take control of your growing Codex by organizing entries into custom groups and categories . Learning ... Read more",
-    "host_name": "www.novelcrafter.com",
-    "rank": 4,
-    "date": "Mar 20, 2026",
-    "favicon": ""
-  },
-  {
-    "url": "https://www.youtube.com/watch?v=rtfF4S1TuwE",
-    "name": "Organizing your Codex Entries into Categories (Ultimate",
-    "snippet": "In this lesson, you'll learn different ways to group your Codex entries into Categories , and how they benefit your work.",
-    "host_name": "www.youtube.com",
-    "rank": 5,
-    "date": "",
-    "favicon": ""
-  },
-  {
-    "url": "https://www.novelcrafter.com/features/codex",
-    "name": "Codex - Your Intelligent Story Bible & World Builder",
-    "snippet": "The Codex tracks progressions on characters, locations, and plot lines in a fully integrated Wiki that keeps your world building consistent.\nGroup entries by tags and details that suit your genre. A set of custom categories for organizing Codex entries, showing example entries with thumbnails and ... Read more\nCreate custom categories and define unique data fields to build a system that mirrors your brain. A set of custom categories for organizing Codex entries,",
-    "host_name": "www.novelcrafter.com",
-    "rank": 6,
+    "rank": 2,
     "date": "",
     "favicon": ""
   },
   {
     "url": "https://www.reddit.com/r/WritingWithAI/comments/1bwzyyb/how_do_i_effectively_fill_out_novelcrafters_codex",
     "name": "How do I effectively fill out Novelcrafter's codex?",
-    "snippet": "Novelcrafter has a very clever system for tracking references and managing which Codex entries are visible in each scene.\nGo to openrouter.ai, start a chat with something like Toppy and paste in the beat generation prompt ( it's under prompts in novelcrafter , \"You ... Read more\nIt doesn't require any special format. Just put in the info that you want the AI to understand . Explain it like you would to your writing ...",
+    "snippet": "Just put in the info that you want the AI to understand . Explain it like you would to your writing assistant. \"Write a brief character summary ...\nIt doesn't require any special format. Just put in the info that you want the AI to understand . Explain it like you would to your writing ...",
     "host_name": "www.reddit.com",
-    "rank": 7,
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.novelcrafter.com/help/reference/terms/novelcrafter",
+    "name": "Glossary of Novelcrafter Terms | Reference",
+    "snippet": "Codex categories are using the tags on each entry for grouping. ... Examples of global codex entries would be ones for your story genre and prose style guide . Read more",
+    "host_name": "www.novelcrafter.com",
+    "rank": 4,
     "date": "",
     "favicon": ""
   }

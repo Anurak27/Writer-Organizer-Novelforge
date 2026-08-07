@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft, Star, Zap, Shield } from 'lucide-react';
+import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft, Star, Zap, Shield, Loader2, Wifi, WifiOff } from 'lucide-react';
 
 const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: string; needsBaseUrl: boolean; needsApiKey?: boolean; defaultBaseUrl?: string }> = {
   openrouter:  { label: 'OpenRouter',       defaultModel: 'openai/gpt-4o-mini',                  hint: 'openrouter.ai/keys',                   needsBaseUrl: false },
@@ -23,7 +23,7 @@ const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: str
   google:      { label: 'Google AI Studio', defaultModel: 'gemini-2.0-flash',                     hint: 'aistudio.google.com/apikey',            needsBaseUrl: false },
   openai:      { label: 'OpenAI',           defaultModel: 'gpt-4o-mini',                          hint: 'platform.openai.com',                   needsBaseUrl: false },
   anthropic:   { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-4-20250514',         hint: 'console.anthropic.com',                 needsBaseUrl: false },
-  ollama:      { label: 'Ollama (Local AI)', defaultModel: 'llama3.1',                              hint: 'ollama.com  —  requires Ollama running locally', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },,
+  ollama:      { label: 'Ollama (Local AI)', defaultModel: 'llama3.1',                              hint: 'ollama.com — install & run Ollama locally, then pull a model (e.g. ollama pull llama3.1)', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
 };
 
 export function SettingsScreen() {
@@ -36,6 +36,8 @@ export function SettingsScreen() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [activating, setActivating] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; models?: string[] } | null>(null);
 
   // Change password
   const [currentPw, setCurrentPw] = useState('');
@@ -134,6 +136,45 @@ export function SettingsScreen() {
       setError('Network error.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    const provDef = PROVIDERS[provider];
+    if (provDef?.needsApiKey !== false && !apiKey.trim()) return;
+    setTesting(true);
+    setTestResult(null);
+    setError('');
+    try {
+      const body: Record<string, unknown> = {
+        provider,
+        apiKey: provDef?.needsApiKey === false ? 'no-key-needed' : apiKey.trim(),
+        modelName: modelName.trim() || null,
+        baseUrl: (provDef?.needsBaseUrl ? (baseUrl.trim() || provDef.defaultBaseUrl) : baseUrl.trim()) || null,
+      };
+      const res = await fetch('/api/ai/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      setTestResult({
+        success: data.success || false,
+        message: data.error || data.message || 'Test completed',
+        models: data.models || undefined,
+      });
+      // If Ollama test succeeded and found models, auto-fill the first one
+      if (data.success && data.models?.length > 0 && !modelName.trim()) {
+        // Extract just the model name (e.g., "llama3.1:latest" -> "llama3.1")
+        setModelName(data.models[0].split(':').shift() || data.models[0]);
+      }
+    } catch {
+      setTestResult({ success: false, message: 'Network error — could not reach the test endpoint.' });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -410,18 +451,50 @@ export function SettingsScreen() {
               </div>
             )}
 
-            <Button
-              onClick={handleSave}
-              disabled={saving || (PROVIDERS[provider]?.needsApiKey !== false && !apiKey.trim())}
-              className="bg-amber-600 hover:bg-amber-500 text-white"
-            >
-              {saving ? 'Saving...' : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save {PROVIDERS[provider]?.label || provider}
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleSave}
+                disabled={saving || (PROVIDERS[provider]?.needsApiKey !== false && !apiKey.trim())}
+                className="bg-amber-600 hover:bg-amber-500 text-white"
+              >
+                {saving ? 'Saving...' : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save {PROVIDERS[provider]?.label || provider}
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleTest}
+                disabled={testing || (PROVIDERS[provider]?.needsApiKey !== false && !apiKey.trim())}
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+              >
+                {testing ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Testing...</>
+                ) : (
+                  <><Wifi className="w-4 h-4 mr-2" />Test Connection</>
+                )}
+              </Button>
+            </div>
+            {testResult && (
+              <div className={`flex items-start gap-2 text-sm p-3 rounded-lg ${
+                testResult.success
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+              }`}>
+                {testResult.success
+                  ? <Wifi className="w-4 h-4 mt-0.5 shrink-0" />
+                  : <WifiOff className="w-4 h-4 mt-0.5 shrink-0" />
+                }
+                <div>
+                  <p>{testResult.message}</p>
+                  {testResult.success && testResult.models && (
+                    <p className="text-xs mt-1 opacity-75">Available: {testResult.models.join(', ')}</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

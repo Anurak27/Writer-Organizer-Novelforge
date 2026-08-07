@@ -61,7 +61,7 @@ export interface ChapterWithScenes {
 export interface CodexEntry {
   id: string;
   bookId: string | null;
-  type: 'character' | 'location' | 'lore' | 'item' | 'subplot' | 'theme';
+  type: string;
   name: string;
   description: string;
   aliases: string[];

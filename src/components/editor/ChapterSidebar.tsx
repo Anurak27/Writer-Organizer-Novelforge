@@ -288,7 +288,12 @@ export function ChapterSidebar() {
                     <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
                   )}
                   <span className="text-xs text-zinc-600 font-mono w-5 shrink-0">{chIdx + 1}</span>
-                  <span className="text-sm text-zinc-300 truncate flex-1">{chapter.title}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-zinc-300 truncate block">{chapter.title}</span>
+                    {chapter.synopsis && expandedChapters.has(chapter.id) && (
+                      <p className="text-[11px] text-zinc-600 leading-relaxed line-clamp-2 mt-0.5">{chapter.synopsis}</p>
+                    )}
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button
@@ -340,14 +345,24 @@ export function ChapterSidebar() {
                     {chapter.scenes.map((scene, scIdx) => (
                       <div
                         key={scene.id}
-                        className={`group flex items-center gap-2 pl-3 pr-2 py-1.5 cursor-pointer hover:bg-zinc-900/80 rounded-r-md mr-1 ${
+                        className={`group flex items-start gap-2 pl-3 pr-2 py-1.5 cursor-pointer hover:bg-zinc-900/80 rounded-r-md mr-1 ${
                           activeSceneId === scene.id ? 'bg-zinc-900' : ''
                         }`}
                         onClick={() => selectScene(chapter.id, scene.id)}
                       >
-                        <FileText className={`w-3.5 h-3.5 shrink-0 ${SCENE_STATUS_COLORS[scene.status] || 'text-zinc-500'}`} />
-                        <span className="text-sm text-zinc-400 truncate flex-1">{scene.title}</span>
-                        <span className="text-[10px] text-zinc-600 font-mono shrink-0">{scene.wordCount || 0}</span>
+                        <FileText className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${SCENE_STATUS_COLORS[scene.status] || 'text-zinc-500'}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-zinc-400 truncate">{scene.title}</span>
+                          </div>
+                          {scene.notes && activeSceneId === scene.id && (
+                            <p className="text-[10px] text-zinc-600 leading-relaxed line-clamp-1 mt-0.5 italic">{scene.notes}</p>
+                          )}
+                          {scene.content && activeSceneId !== scene.id && (
+                            <p className="text-[10px] text-zinc-700 line-clamp-1 mt-0.5">{scene.content.slice(0, 80).trim()}{scene.content.length > 80 ? '...' : ''}</p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-zinc-600 font-mono shrink-0 mt-0.5">{scene.wordCount || 0}</span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                             <Button

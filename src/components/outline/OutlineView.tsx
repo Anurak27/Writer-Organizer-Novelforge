@@ -154,7 +154,9 @@ function SceneRow({
   const preview =
     scene.content && scene.content.length > 0
       ? scene.content.slice(0, 150).trim() + (scene.content.length > 150 ? '…' : '')
-      : null;
+      : scene.notes
+        ? scene.notes.slice(0, 120).trim() + (scene.notes.length > 120 ? '…' : '')
+        : null;
 
   return (
     <button
@@ -180,7 +182,8 @@ function SceneRow({
         )}
       </div>
       {preview && (
-        <p className="text-xs text-zinc-600 leading-relaxed line-clamp-2 ml-7">
+        <p className={`text-xs leading-relaxed line-clamp-2 ml-7 ${scene.content ? 'text-zinc-600' : 'text-zinc-600 italic'}`}>
+          {scene.notes && !scene.content && <span className="text-zinc-700 mr-1">Notes:</span>}
           {preview}
         </p>
       )}

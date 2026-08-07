@@ -145,3 +145,31 @@ Stage Summary:
 - Ollama (local AI) fully supported - select it in Settings, point to localhost:11434
 - Custom codex categories and metadata fields planned for next iteration
 - Deployed to Vercel
+---
+Task ID: 5
+Agent: Super Z (Main)
+Task: Implement Codex custom categories (NovelCrafter-style "Others" tab)
+
+Work Log:
+- Changed CodexEntry.type in useAppStore.ts from union type (`'character' | 'location' | ...`) to `string` to support custom category IDs
+- Created `/api/codex/categories/route.ts` with GET (merged built-in + custom), POST (create custom category), DELETE (remove custom category)
+- Custom categories stored in AppSetting table (key: `custom_codex_categories`) as JSON array of `{ id, name, color, icon }`
+- Updated CodexPanel.tsx with comprehensive custom categories UI:
+  - Replaced Radix Tabs with lightweight custom `FilterTab` button components (no overflow issues with many tabs)
+  - Added all 6 built-in types: Character, Location, Lore, Item, Subplot (GitBranch icon), Theme (Sparkles icon)
+  - Added "Others" tab that appears when custom categories exist, expands to reveal sub-list of custom category filter buttons
+  - Added "Manage Custom Categories" dialog (gear icon in header) with create/delete functionality
+  - Type selector in create/edit dialog now shows all built-in types + custom categories with icons and color dots
+  - Custom category entries render with colored badge labels
+  - 9 cycling colors (rose, pink, fuchsia, purple, indigo, sky, teal, lime, orange) and 9 cycling icons (Bookmark, Palette, Music, TreePine, Globe, GraduationCap, Heart, Flame, Landmark)
+- Used existing `getSetting`/`setSetting` helpers from `src/lib/auth.ts` for AppSetting CRUD
+- All new code lint-clean (0 errors, 0 warnings)
+
+Stage Summary:
+- Codex now supports unlimited custom categories (stored in AppSetting as JSON, no schema migration needed)
+- Filter tabs: All, Chars, Locs, Lore, Items, Sub, Theme, Others (expandable)
+- "Others" tab expands to show custom category sub-filters when custom categories exist
+- Category manager dialog accessible via gear icon in codex panel header
+- Type selector in form dialog includes custom categories with icons and color indicators
+- Custom entries display colored badge labels matching their category
+- MentionDropdown already compatible (uses `Record<string, ...>` for icon/color maps)
