@@ -15,14 +15,15 @@ import {
 } from '@/components/ui/select';
 import { Key, Save, Trash2, CheckCircle, AlertCircle, BookOpen, LogOut, ArrowLeft, Star, Zap, Shield } from 'lucide-react';
 
-const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: string; needsBaseUrl: boolean }> = {
-  openrouter:  { label: 'OpenRouter',      defaultModel: 'openai/gpt-4o-mini',                  hint: 'openrouter.ai/keys',                   needsBaseUrl: false },
-  groq:        { label: 'Groq',            defaultModel: 'llama-3.3-70b-versatile',               hint: 'console.groq.com/keys',                needsBaseUrl: false },
-  cerebras:    { label: 'Cerebras',        defaultModel: 'llama-4-scout-17b-16e-instruct',      hint: 'cloud.cerebras.ai',                    needsBaseUrl: false },
-  nararouter:  { label: 'NaraRouter',      defaultModel: 'openai/gpt-4o-mini',                  hint: 'router.bynara.id',                     needsBaseUrl: true },
-  google:      { label: 'Google AI Studio',defaultModel: 'gemini-2.0-flash',                     hint: 'aistudio.google.com/apikey',            needsBaseUrl: false },
-  openai:      { label: 'OpenAI',          defaultModel: 'gpt-4o-mini',                          hint: 'platform.openai.com',                   needsBaseUrl: false },
+const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: string; needsBaseUrl: boolean; needsApiKey?: boolean; defaultBaseUrl?: string }> = {
+  openrouter:  { label: 'OpenRouter',       defaultModel: 'openai/gpt-4o-mini',                  hint: 'openrouter.ai/keys',                   needsBaseUrl: false },
+  groq:        { label: 'Groq',             defaultModel: 'llama-3.3-70b-versatile',               hint: 'console.groq.com/keys',                needsBaseUrl: false },
+  cerebras:    { label: 'Cerebras',         defaultModel: 'llama-4-scout-17b-16e-instruct',      hint: 'cloud.cerebras.ai',                    needsBaseUrl: false },
+  nararouter:  { label: 'NaraRouter',       defaultModel: 'openai/gpt-4o-mini',                  hint: 'router.bynara.id',                     needsBaseUrl: true },
+  google:      { label: 'Google AI Studio', defaultModel: 'gemini-2.0-flash',                     hint: 'aistudio.google.com/apikey',            needsBaseUrl: false },
+  openai:      { label: 'OpenAI',           defaultModel: 'gpt-4o-mini',                          hint: 'platform.openai.com',                   needsBaseUrl: false },
   anthropic:   { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-4-20250514',         hint: 'console.anthropic.com',                 needsBaseUrl: false },
+  ollama:      { label: 'Ollama (Local AI)', defaultModel: 'llama3.1',                              hint: 'ollama.com  —  requires Ollama running locally', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },,
 };
 
 export function SettingsScreen() {
@@ -84,19 +85,29 @@ export function SettingsScreen() {
     if (existing) {
       setModelName(existing.modelName || '');
       setBaseUrl(existing.baseUrl || '');
+    } else {
+      // Pre-fill default base URL for providers that need it
+      if (PROVIDERS[p]?.needsBaseUrl && PROVIDERS[p]?.defaultBaseUrl) {
+        setBaseUrl(PROVIDERS[p].defaultBaseUrl!);
+      }
     }
   };
 
   const handleSave = async () => {
-    if (!apiKey.trim() || !token) return;
+    const provDef = PROVIDERS[provider];
+    // Ollama doesn't need an API key, just needs baseUrl
+    if (!provDef?.needsApiKey && !apiKey.trim() && !baseUrl.trim()) {
+      setError('Ollama needs a base URL. Default: http://localhost:11434');
+      return;
+    }
+    if (provDef?.needsApiKey !== false && !apiKey.trim()) return;
     setSaving(true);
     setSuccess('');
     setError('');
     try {
-      const provDef = PROVIDERS[provider];
       const body: Record<string, unknown> = {
         provider,
-        apiKey: apiKey.trim(),
+        apiKey: provDef?.needsApiKey === false ? 'no-key-needed' : apiKey.trim(),
         modelName: modelName.trim() || null,
       };
       // Only send baseUrl if the provider needs it or if user provided one
@@ -112,7 +123,7 @@ export function SettingsScreen() {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        setSuccess(`${provDef?.label || provider} API key saved successfully.`);
+        setSuccess(`${provDef?.label || provider} saved successfully.`);
         setApiKey('');
         fetchConfigs();
       } else {
@@ -338,20 +349,24 @@ export function SettingsScreen() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-zinc-300 mb-1.5 block">API Key</label>
+              <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
+                API Key{PROVIDERS[provider]?.needsApiKey === false && ' (optional for this provider)'}
+              </label>
               <Input
                 type="password"
                 placeholder={
-                  configs.find((c) => c.provider === provider)
-                    ? 'Enter new key to replace...'
-                    : 'Paste your API key...'
+                  PROVIDERS[provider]?.needsApiKey === false
+                    ? 'Not needed for local AI'
+                    : configs.find((c) => c.provider === provider)
+                      ? 'Enter new key to replace...'
+                      : 'Paste your API key...'
                 }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono text-sm"
               />
               <p className="text-xs text-zinc-600 mt-1">
-                Get your key from {PROVIDERS[provider]?.hint}
+                {PROVIDERS[provider]?.needsApiKey === false ? PROVIDERS[provider]?.hint : `Get your key from ${PROVIDERS[provider]?.hint}`}
               </p>
             </div>
 
@@ -361,7 +376,7 @@ export function SettingsScreen() {
                   Base URL
                 </label>
                 <Input
-                  placeholder={PROVIDERS[provider]?.defaultModel ? `https://...` : 'https://...'}
+                  placeholder={PROVIDERS[provider]?.defaultModel || 'http://localhost:11434'}
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 font-mono text-sm"
@@ -397,13 +412,13 @@ export function SettingsScreen() {
 
             <Button
               onClick={handleSave}
-              disabled={saving || !apiKey.trim()}
+              disabled={saving || (PROVIDERS[provider]?.needsApiKey !== false && !apiKey.trim())}
               className="bg-amber-600 hover:bg-amber-500 text-white"
             >
               {saving ? 'Saving...' : (
                 <>
                   <Save className="w-4 h-4 mr-2" />
-                  Save {PROVIDERS[provider]?.label || provider} Key
+                  Save {PROVIDERS[provider]?.label || provider}
                 </>
               )}
             </Button>

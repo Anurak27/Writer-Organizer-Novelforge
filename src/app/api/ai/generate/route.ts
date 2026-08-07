@@ -217,6 +217,7 @@ const PROVIDERS: Record<string, ProviderDef> = {
   cerebras:    { defaultModel: 'llama-4-scout-17b-16e-instruct', baseUrl: 'https://api.cerebras.ai/v1/chat/completions', format: 'openai' },
   nararouter:  { defaultModel: 'openai/gpt-4o-mini',       baseUrl: 'https://router.bynara.id/v1/chat/completions', format: 'openai' },
   google:      { defaultModel: 'gemini-2.0-flash',          baseUrl: 'https://generativelanguage.googleapis.com/v1beta', format: 'google' },
+  ollama:      { defaultModel: 'llama3.1',                  baseUrl: 'http://localhost:11434/v1/chat/completions', format: 'openai' },
 };
 
 async function callAI(
@@ -235,24 +236,21 @@ async function callAI(
   // --- Google Gemini (native format) ---
   if (def.format === 'google') {
     const base = customBaseUrl || def.baseUrl;
-    const url = `${base}/models/${model}:generateContent`;
+    const url = `${base}/models/${model}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': apiKey,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ parts: [{ text: userMessage }] }],
-        generationConfig: {
-          maxOutputTokens: 2000,
-          temperature: 0.8,
-        },
+        generationConfig: { maxOutputTokens: 2000, temperature: 0.8 },
       }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    if (data.error) {
+      const msg = data.error.message || data.error.status || JSON.stringify(data.error);
+      throw new Error(`Gemini API error: ${msg}`);
+    }
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
@@ -279,14 +277,16 @@ async function callAI(
     return data.content[0].text;
   }
 
-  // --- OpenAI-compatible (covers openai, openrouter, groq, cerebras, nararouter, etc.) ---
+  // --- OpenAI-compatible (covers openai, openrouter, groq, cerebras, nararouter, ollama, etc.) ---
   const url = customBaseUrl || def.baseUrl;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Ollama doesn't require auth; all others do
+  if (provider !== 'ollama' && apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model,
       messages: [

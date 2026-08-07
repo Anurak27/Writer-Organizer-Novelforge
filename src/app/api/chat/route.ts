@@ -221,6 +221,11 @@ const PROVIDERS: Record<string, ProviderDef> = {
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     format: 'google',
   },
+  ollama: {
+    defaultModel: 'llama3.1',
+    baseUrl: 'http://localhost:11434/v1/chat/completions',
+    format: 'openai',
+  },
 };
 
 // --- Multi-turn AI call ---
@@ -243,17 +248,14 @@ async function callAIWithHistory(
   // --- Google Gemini (native format) ---
   if (def.format === 'google') {
     const base = customBaseUrl || def.baseUrl;
-    const url = `${base}/models/${model}:generateContent`;
+    const url = `${base}/models/${model}:generateContent?key=${apiKey}`;
     const contents = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': apiKey,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents,
@@ -264,7 +266,10 @@ async function callAIWithHistory(
       }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    if (data.error) {
+      const msg = data.error.message || data.error.status || JSON.stringify(data.error);
+      throw new Error(`Gemini API error: ${msg}`);
+    }
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
@@ -297,12 +302,13 @@ async function callAIWithHistory(
     { role: 'system' as const, content: systemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (provider !== 'ollama' && apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model,
       messages: apiMessages,
