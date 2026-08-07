@@ -8,6 +8,17 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Copy, Replace, X, Wand2, Expand, Shrink, RefreshCw, Loader2, Play, FileText } from 'lucide-react';
 import { extractMentions } from '@/components/editor/MentionDropdown';
+import { getActiveAiConfig, callLocalAI } from '@/lib/ai-client';
+
+function buildLocalSystemPrompt(action: string): string {
+  let prompt = 'You are a skilled creative writing assistant helping a novelist. Respond only with prose text. Do not include meta-commentary or markdown code blocks.';
+  if (action === 'summarize') {
+    prompt = 'You are a creative writing assistant. Write a concise 2-3 sentence summary. Do not include meta-commentary.';
+  } else if (action === 'generate_scene') {
+    prompt = 'You are a skilled creative writing assistant. Write a rough draft scene in prose form with dialogue, action, and sensory details. Use a literary fiction style. Respond only with the prose.';
+  }
+  return prompt;
+}
 
 export function AiPanel() {
   const token = useAppStore((s) => s.token);
@@ -33,10 +44,11 @@ export function AiPanel() {
           ? extractMentions(activeScene.content)
           : [];
 
+        const sceneContent = text || activeScene?.content || '';
         const body: Record<string, unknown> = {
           action,
-          text: text || activeScene?.content || '',
-          sceneContent: activeScene?.content || '',
+          text: sceneContent,
+          sceneContent,
           mentionedNames,
           bookId: activeBookId,
           sceneId: activeScene?.id,
@@ -46,25 +58,54 @@ export function AiPanel() {
           body.beats = beats;
         }
 
-        const res = await fetch('/api/ai/generate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        });
+        // Check if we should use client-side local AI (Ollama/custom)
+        const localConfig = await getActiveAiConfig(token);
 
-        const data = await res.json();
+        if (localConfig) {
+          // Build a simple prompt for local AI (no server-side codex context)
+          const systemPrompt = buildLocalSystemPrompt(action);
+          let userMessage = '';
+          if (action === 'expand') {
+            userMessage = `Expand the following passage with more detail, sensory description, and emotional depth while maintaining the author's voice and style:\n\n${sceneContent}`;
+          } else if (action === 'rewrite') {
+            userMessage = `Rewrite the following passage to improve flow, clarity, and prose quality while preserving the original meaning:\n\n${sceneContent}`;
+          } else if (action === 'shorten') {
+            userMessage = `Condense the following passage to be more concise while preserving key plot points:\n\n${sceneContent}`;
+          } else if (action === 'continue') {
+            userMessage = `Continue writing from the following text. Pick up exactly where it leaves off:\n\n${sceneContent}`;
+          } else if (action === 'summarize') {
+            userMessage = `Write a concise 2-3 sentence summary of this scene:\n\n${sceneContent}`;
+          } else if (action === 'generate_scene') {
+            userMessage = `Write a rough draft scene based on these beats:\n${beats}\n\nWrite it in prose form with dialogue, action, and sensory details.`;
+          } else {
+            userMessage = sceneContent;
+          }
 
-        if (!res.ok) {
-          setAiError(data.error || 'AI generation failed');
-          return;
+          const result = await callLocalAI(localConfig, systemPrompt, userMessage);
+          setAiGeneratedText(result);
+        } else {
+          // Server-side AI (cloud providers)
+          const res = await fetch('/api/ai/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            setAiError(data.error || 'AI generation failed');
+            return;
+          }
+
+          setAiGeneratedText(data.result);
         }
-
-        setAiGeneratedText(data.result);
-      } catch {
-        setAiError('Network error. Please check your API key and try again.');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Network error. Please check your API key and try again.';
+        setAiError(msg);
       } finally {
         setAiLoading(false);
       }

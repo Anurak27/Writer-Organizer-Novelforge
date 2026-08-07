@@ -17,7 +17,6 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
-  FileText,
   BookOpen,
   MoreVertical,
   Trash2,
@@ -25,6 +24,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +43,14 @@ const SCENE_STATUS_COLORS: Record<string, string> = {
   in_progress: 'text-amber-400',
   needs_revision: 'text-orange-400',
   complete: 'text-emerald-400',
+};
+
+const SCENE_STATUS_DOTS: Record<string, string> = {
+  outline: 'bg-zinc-500',
+  draft: 'bg-blue-400',
+  in_progress: 'bg-amber-400',
+  needs_revision: 'bg-orange-400',
+  complete: 'bg-emerald-400',
 };
 
 export function ChapterSidebar() {
@@ -267,45 +280,51 @@ export function ChapterSidebar() {
               </Button>
             </div>
           ) : (
-            chapters.map((chapter, chIdx) => (
+            chapters.map((chapter, chIdx) => {
+              const chWordCount = chapter.scenes.reduce((s, sc) => s + sc.wordCount, 0);
+              const completedScenes = chapter.scenes.filter((sc) => sc.status === 'complete').length;
+              const chTotalScenes = chapter.scenes.length;
+              const chProgress = chTotalScenes > 0 ? Math.round((completedScenes / chTotalScenes) * 100) : 0;
+
+              return (
               <div key={chapter.id}>
-                {/* Chapter Row */}
-                <div
-                  className={`group flex items-center gap-1 px-2 py-1.5 cursor-pointer hover:bg-zinc-900 ${
-                    activeChapterId === chapter.id && !activeSceneId ? 'bg-zinc-900' : ''
-                  }`}
-                  onClick={() => {
-                    toggleChapter(chapter.id);
-                    if (expandedChapters.has(chapter.id)) {
-                      setActiveChapterId(chapter.id);
-                      setActiveSceneId(null);
-                    }
-                  }}
-                >
-                  {expandedChapters.has(chapter.id) ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
-                  )}
-                  <span className="text-xs text-zinc-600 font-mono w-5 shrink-0">{chIdx + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm text-zinc-300 truncate block">{chapter.title}</span>
-                    {expandedChapters.has(chapter.id) && (
-                    <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-3 mt-0.5 pl-[22px]">{chapter.synopsis}</p>
-                    )}
-                    {!expandedChapters.has(chapter.id) && chapter.synopsis && (
-                      <p className="text-[10px] text-zinc-600 leading-relaxed line-clamp-1 mt-0.5 pl-[22px]">{chapter.synopsis}</p>
-                    )}
-                    {chapter.scenes.length > 0 && !expandedChapters.has(chapter.id) && (
-                      <div className="flex items-center gap-1.5 mt-0.5 pl-[22px]">
-                        <span className="text-[10px] text-zinc-700">{chapter.scenes.length} scene{chapter.scenes.length > 1 ? 's' : ''}</span>
-                        {chapter.scenes.reduce((s, sc) => s + sc.wordCount, 0) > 0 && (
-                          <span className="text-[10px] text-zinc-700">· {chapter.scenes.reduce((s, sc) => s + sc.wordCount, 0).toLocaleString()}w</span>
+                <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={`group flex items-center gap-1 px-2 py-2 cursor-pointer hover:bg-zinc-900/70 rounded-md mx-1 ${
+                        activeChapterId === chapter.id && !activeSceneId ? 'bg-zinc-900/80' : ''
+                      }`}
+                      onClick={() => {
+                        toggleChapter(chapter.id);
+                        if (expandedChapters.has(chapter.id)) {
+                          setActiveChapterId(chapter.id);
+                          setActiveSceneId(null);
+                        }
+                      }}
+                    >
+                      {expandedChapters.has(chapter.id) ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                      )}
+                      <span className="text-[11px] text-zinc-600 font-mono w-5 shrink-0 text-right">{chIdx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-zinc-300 truncate block font-medium">{chapter.title}</span>
+                        {expandedChapters.has(chapter.id) && chapter.synopsis && (
+                          <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-3 mt-1 pl-[22px]">{chapter.synopsis}</p>
                         )}
                       </div>
-                    )}
-                  </div>
-                  <DropdownMenu>
+                      {/* Badges */}
+                      <div className="flex items-center gap-1.5 shrink-0 mr-1">
+                        {chapter.scenes.length > 0 && (
+                          <span className="text-[10px] bg-zinc-800/80 text-zinc-400 px-1.5 py-0 rounded-md font-medium tabular-nums">{chapter.scenes.length}sc</span>
+                        )}
+                        {chWordCount > 0 && (
+                          <span className="text-[10px] bg-zinc-800/80 text-zinc-400 px-1.5 py-0 rounded-md font-medium tabular-nums">{chWordCount >= 1000 ? `${(chWordCount / 1000).toFixed(1)}k` : chWordCount}w</span>
+                        )}
+                      </div>
+                      <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
@@ -348,7 +367,28 @@ export function ChapterSidebar() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
+                    </div>
+                  </TooltipTrigger>
+                  {/* Tooltip shows synopsis when collapsed */}
+                  {!expandedChapters.has(chapter.id) && chapter.synopsis && (
+                    <TooltipContent side="right" className="max-w-[250px] bg-zinc-900 border-zinc-700 text-zinc-300 text-xs">
+                      <p className="line-clamp-4 leading-relaxed">{chapter.synopsis}</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+                </TooltipProvider>
+
+                {/* Word count progress bar per chapter */}
+                {chTotalScenes > 0 && (
+                  <div className="px-4 pb-1">
+                    <div className="h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${chProgress === 100 ? 'bg-emerald-500' : chProgress >= 50 ? 'bg-amber-500/70' : 'bg-zinc-600'}`}
+                        style={{ width: `${Math.max(chProgress, 3)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Scenes */}
                 {expandedChapters.has(chapter.id) && (
@@ -361,10 +401,10 @@ export function ChapterSidebar() {
                         }`}
                         onClick={() => selectScene(chapter.id, scene.id)}
                       >
-                        <FileText className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${SCENE_STATUS_COLORS[scene.status] || 'text-zinc-500'}`} />
+                        <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${SCENE_STATUS_DOTS[scene.status] || 'bg-zinc-500'}`} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm text-zinc-400 truncate">{scene.title}</span>
+                            <span className={`text-sm truncate ${activeSceneId === scene.id ? 'text-zinc-200 font-medium' : 'text-zinc-400'}`}>{scene.title}</span>
                           </div>
                           {scene.notes && activeSceneId === scene.id && (
                             <p className="text-[10px] text-zinc-600 leading-relaxed line-clamp-1 mt-0.5 italic">{scene.notes}</p>
@@ -373,7 +413,7 @@ export function ChapterSidebar() {
                             <p className="text-[10px] text-zinc-700 line-clamp-1 mt-0.5">{scene.content.slice(0, 80).trim()}{scene.content.length > 80 ? '...' : ''}</p>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-600 font-mono shrink-0 mt-0.5">{scene.wordCount || 0}</span>
+                        <span className="text-[10px] text-zinc-600 font-mono shrink-0 mt-0.5 tabular-nums">{scene.wordCount || 0}</span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                             <Button
@@ -421,7 +461,8 @@ export function ChapterSidebar() {
                   </div>
                 )}
               </div>
-            ))
+            );
+            })
           )}
         </div>
       </ScrollArea>

@@ -26,9 +26,18 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+const TAB_LABELS: Record<string, string> = {
+  codex: 'Codex',
+  ai: 'AI Assist',
+  notes: 'Details',
+  chat: 'Chat',
+  snippets: 'Clips',
+};
+
 export function EditorView() {
   const setView = useAppStore((s) => s.setView);
   const activeBookId = useAppStore((s) => s.activeBookId);
+  const activeBook = useAppStore((s) => s.activeBook);
   const chapters = useAppStore((s) => s.chapters);
   const activeScene = useAppStore((s) => s.activeScene);
   const aiPanelOpen = useAppStore((s) => s.aiPanelOpen);
@@ -104,7 +113,11 @@ export function EditorView() {
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
       {/* Top Nav */}
-      <header className="shrink-0 border-b border-zinc-800/50 bg-zinc-950/90 backdrop-blur-sm flex items-center justify-between px-3 py-2 z-10">
+      <header className="shrink-0 border-b border-zinc-800/50 bg-zinc-950/90 backdrop-blur-sm flex items-center justify-between px-3 py-2 z-10 relative">
+        {/* Subtle gradient glow behind stats */
+        aiPanelOpen && (
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-full bg-gradient-to-r from-transparent via-amber-500/[0.03] to-transparent pointer-events-none" />
+        )}
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -119,17 +132,34 @@ export function EditorView() {
           <div className="hidden sm:flex items-center gap-1.5">
             <BookOpen className="w-4 h-4 text-amber-500" />
             <span className="text-sm font-medium text-zinc-300 max-w-[200px] truncate">
-              {chapters.length > 0 ? 'Current Book' : 'Loading...'}
+              {activeBook?.title || (chapters.length > 0 ? 'Current Book' : 'Loading...')}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-          <span>{chapters.length} chapters</span>
-          <span className="text-zinc-700">·</span>
-          <span>{chapters.reduce((s, c) => s + c.scenes.length, 0)} scenes</span>
-          <span className="text-zinc-700">·</span>
-          <span>{totalWords.toLocaleString()} words</span>
+        <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-1.5 text-zinc-500">
+            <span className="tabular-nums">{chapters.length}</span>
+            <span>ch</span>
+            <span className="text-zinc-700">·</span>
+            <span className="tabular-nums">{chapters.reduce((s, c) => s + c.scenes.length, 0)}</span>
+            <span>sc</span>
+            <span className="text-zinc-700">·</span>
+            <span className="text-zinc-300 font-medium tabular-nums">{totalWords.toLocaleString()}</span>
+            <span>w</span>
+          </div>
+          {/* Visual mode indicator */}
+          {aiPanelOpen && activeScene && (
+            <div className="hidden md:flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[10px] text-amber-400 font-medium uppercase tracking-wider">{TAB_LABELS[rightPanelTab]}</span>
+            </div>
+          )}
+          {aiPanelOpen && !activeScene && (
+            <div className="hidden md:flex items-center gap-1.5 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2 py-0.5">
+              <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">{TAB_LABELS[rightPanelTab]}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -175,40 +205,40 @@ export function EditorView() {
 
           {/* Right Panel (Codex / AI / Chat / Snippets / Notes) */}
           {aiPanelOpen && (
-            <div className="w-72 lg:w-80 border-l border-zinc-800 bg-zinc-950 flex flex-col shrink-0">
+            <div className="w-72 lg:w-80 xl:w-84 border-l border-zinc-800 bg-zinc-950 flex flex-col shrink-0">
               <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as 'codex' | 'ai' | 'notes' | 'chat' | 'snippets')} className="flex flex-col h-full">
                 <TabsList className="bg-transparent border-b border-zinc-800/50 rounded-none h-auto p-0 shrink-0 overflow-x-auto">
                   <TabsTrigger
                     value="codex"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-0 data-[state=active]:border-l-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
                     <Database className="w-3.5 h-3.5 mr-1" />
                     Codex
                   </TabsTrigger>
                   <TabsTrigger
                     value="ai"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-0 data-[state=active]:border-l-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
                     <Sparkles className="w-3.5 h-3.5 mr-1" />
                     AI
                   </TabsTrigger>
                   <TabsTrigger
                     value="chat"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-0 data-[state=active]:border-l-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
                     <MessageSquare className="w-3.5 h-3.5 mr-1" />
                     Chat
                   </TabsTrigger>
                   <TabsTrigger
                     value="snippets"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-0 data-[state=active]:border-l-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
                     <Bookmark className="w-3.5 h-3.5 mr-1" />
                     Clips
                   </TabsTrigger>
                   <TabsTrigger
                     value="notes"
-                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
+                    className="flex-1 h-10 rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-0 data-[state=active]:border-l-2 data-[state=active]:border-amber-500 text-zinc-500 data-[state=active]:text-zinc-200 text-[11px] px-1"
                   >
                     <StickyNote className="w-3.5 h-3.5 mr-1" />
                     Details

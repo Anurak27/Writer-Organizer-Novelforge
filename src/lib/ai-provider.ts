@@ -4,7 +4,7 @@
 export interface ProviderDef {
   defaultModel: string;
   baseUrl: string;
-  format: 'openai' | 'anthropic' | 'google';
+  format: 'openai' | 'anthropic' | 'google' | 'ollama' | 'ollama_native';
 }
 
 export const PROVIDERS: Record<string, ProviderDef> = {
@@ -15,7 +15,8 @@ export const PROVIDERS: Record<string, ProviderDef> = {
   cerebras:    { defaultModel: 'llama-4-scout-17b-16e-instruct', baseUrl: 'https://api.cerebras.ai/v1/chat/completions', format: 'openai' },
   nararouter:  { defaultModel: 'openai/gpt-4o-mini',       baseUrl: 'https://router.bynara.id/v1/chat/completions', format: 'openai' },
   google:      { defaultModel: 'gemini-2.0-flash',          baseUrl: 'https://generativelanguage.googleapis.com/v1beta', format: 'google' },
-  ollama:      { defaultModel: 'llama3.1',                  baseUrl: 'http://localhost:11434/v1/chat/completions', format: 'openai' },
+  ollama:      { defaultModel: 'llama3.1',                  baseUrl: 'http://localhost:11434/v1/chat/completions', format: 'ollama' },
+  ollama_native:{ defaultModel: 'llama3.1',                baseUrl: 'http://localhost:11434/api/generate', format: 'ollama_native' },
   custom:     { defaultModel: 'local-model',              baseUrl: 'http://localhost:1234/v1/chat/completions', format: 'openai' },
 };
 
@@ -25,8 +26,7 @@ export function getProviderDef(provider: string): ProviderDef {
   return def;
 }
 
-export function isLocalProvider(provider: string): boolean {
-  return provider === 'ollama' || provider === 'custom';
+export function isLocalProvider(provider: string): boolean {  return provider === 'ollama' || provider === 'ollama_native' || provider === 'custom';
 }
 
 // ── Server-side AI call (single-turn) ────────────────────────────────
@@ -44,10 +44,35 @@ export async function callAI(
   const maxTokens = options?.maxTokens ?? 2000;
   const temperature = options?.temperature ?? 0.8;
 
+  // --- Ollama Native (/api/generate) ---
+  if (def.format === 'ollama_native') {
+    const url = customBaseUrl || def.baseUrl;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt: `${systemPrompt}\n\nUser: ${userMessage}\n\nAssistant:`,
+        stream: false,
+        options: { num_predict: maxTokens, temperature },
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Ollama native error (${res.status}): ${text.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(`Ollama error: ${data.error}`);
+    return data.response || '';
+  }
+
   // --- Google Gemini (native format) ---
   if (def.format === 'google') {
     const base = customBaseUrl || def.baseUrl;
-    const url = `${base}/models/${model}:generateContent?key=${apiKey}`;
+    // Clean the API key: remove whitespace and newlines that may be pasted accidentally
+    const cleanKey = apiKey.replace(/[\s\n\r]/g, '');
+    const url = `${base}/models/${model}:generateContent?key=${cleanKey}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,10 +154,39 @@ export async function callAIWithHistory(
   const maxTokens = options?.maxTokens ?? 2000;
   const temperature = options?.temperature ?? 0.8;
 
+  // --- Ollama Native (/api/generate) multi-turn ---
+  if (def.format === 'ollama_native') {
+    const url = customBaseUrl || def.baseUrl;
+    let prompt = `${systemPrompt}\n\n`;
+    for (const m of messages) {
+      prompt += `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}\n\n`;
+    }
+    prompt += 'Assistant: ';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: false,
+        options: { num_predict: maxTokens, temperature },
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Ollama native error (${res.status}): ${text.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(`Ollama error: ${data.error}`);
+    return data.response || '';
+  }
+
   // --- Google Gemini (native format) ---
   if (def.format === 'google') {
     const base = customBaseUrl || def.baseUrl;
-    const url = `${base}/models/${model}:generateContent?key=${apiKey}`;
+    const cleanKey = apiKey.replace(/[\s\n\r]/g, '');
+    const url = `${base}/models/${model}:generateContent?key=${cleanKey}`;
     const contents = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],

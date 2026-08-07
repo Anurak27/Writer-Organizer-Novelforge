@@ -20,10 +20,11 @@ const PROVIDERS: Record<string, { label: string; defaultModel: string; hint: str
   groq:        { label: 'Groq',             defaultModel: 'llama-3.3-70b-versatile',               hint: 'console.groq.com/keys',                needsBaseUrl: false },
   cerebras:    { label: 'Cerebras',         defaultModel: 'llama-4-scout-17b-16e-instruct',      hint: 'cloud.cerebras.ai',                    needsBaseUrl: false },
   nararouter:  { label: 'NaraRouter',       defaultModel: 'openai/gpt-4o-mini',                  hint: 'router.bynara.id',                     needsBaseUrl: true },
-  google:      { label: 'Google AI Studio', defaultModel: 'gemini-2.0-flash',                     hint: 'aistudio.google.com/apikey',            needsBaseUrl: false },
+  google:      { label: 'Google AI Studio (Gemini)', defaultModel: 'gemini-2.0-flash',        hint: 'aistudio.google.com/apikey — Paste the full API key (starts with AIza)', needsBaseUrl: false },
   openai:      { label: 'OpenAI',           defaultModel: 'gpt-4o-mini',                          hint: 'platform.openai.com',                   needsBaseUrl: false },
   anthropic:   { label: 'Anthropic (Claude)', defaultModel: 'claude-sonnet-4-20250514',         hint: 'console.anthropic.com',                 needsBaseUrl: false },
-  ollama:      { label: 'Ollama (Local AI)', defaultModel: 'llama3.1',                              hint: 'Install Ollama from ollama.com, then run: ollama pull llama3.1', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
+  ollama:      { label: 'Ollama (Local AI — OpenAI mode)', defaultModel: 'llama3.1',         hint: 'Install from ollama.com, then run: ollama pull llama3.1 — Uses /v1/chat/completions (auto-falls back to native)', defaultBaseUrl: 'http://localhost:11434/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
+  ollama_native: { label: 'Ollama (Local AI — Native mode)', defaultModel: 'llama3.1',      hint: 'Uses Ollama native /api/generate endpoint. More reliable for some setups.', defaultBaseUrl: 'http://localhost:11434/api/generate', needsBaseUrl: true, needsApiKey: false },
   custom:     { label: 'Other Local LLM (OpenAI-compatible)', defaultModel: '',                                     hint: 'For LM Studio, KoboldCpp, text-generation-webui, or any OpenAI-compatible server', defaultBaseUrl: 'http://localhost:1234/v1/chat/completions', needsBaseUrl: true, needsApiKey: false },
 };
 

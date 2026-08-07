@@ -23,6 +23,14 @@ const STATUS_STYLES: Record<string, string> = {
   complete: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
 };
 
+const STATUS_DOT_COLORS: Record<string, string> = {
+  outline: 'bg-zinc-500',
+  draft: 'bg-blue-400',
+  in_progress: 'bg-amber-400',
+  needs_revision: 'bg-orange-400',
+  complete: 'bg-emerald-400',
+};
+
 function statusLabel(status: string) {
   switch (status) {
     case 'in_progress':
@@ -181,10 +189,10 @@ function SceneRow({
           </span>
         )}
       </div>
-      {preview && (
-        <p className={`text-xs leading-relaxed line-clamp-2 ml-7 ${scene.content ? 'text-zinc-600' : 'text-zinc-600 italic'}`}>
-          {scene.notes && !scene.content && <span className="text-zinc-700 mr-1">Notes:</span>}
-          {preview}
+      {(preview || scene.notes) && (
+        <p className={`text-xs leading-relaxed line-clamp-2 ml-7 ${scene.content ? 'text-zinc-500' : 'text-zinc-500 italic'}`}>
+          {scene.notes && !scene.content && <span className="text-amber-500/60 mr-1 font-medium">Notes:</span>}
+          {preview || (scene.notes ? scene.notes.slice(0, 120).trim() + (scene.notes.length > 120 ? '…' : '') : null)}
         </p>
       )}
     </button>
@@ -209,6 +217,10 @@ function ChapterBlock({
   const [savingSynopsis, setSavingSynopsis] = useState(false);
 
   const chapterWords = chapter.scenes.reduce((s, sc) => s + sc.wordCount, 0);
+  const completedScenes = chapter.scenes.filter((sc) => sc.status === 'complete').length;
+  const totalScenes = chapter.scenes.length;
+  const progressPercent = totalScenes > 0 ? Math.round((completedScenes / totalScenes) * 100) : 0;
+  const progressColor = progressPercent === 100 ? 'bg-emerald-500' : progressPercent >= 50 ? 'bg-amber-500' : 'bg-zinc-600';
 
   const handleSaveTitle = useCallback(
     async (title: string) => {
@@ -257,10 +269,13 @@ function ChapterBlock({
   );
 
   return (
-    <div className="border-l-2 border-amber-500/30 pl-4">
+    <div className="border-l-2 border-amber-500/20 pl-4 relative">
+      {/* Gradient divider between chapters */}
+      <div className="absolute -left-px top-0 bottom-0 w-px bg-gradient-to-b from-amber-500/0 via-amber-500/20 to-amber-500/0" />
+
       {/* Chapter header */}
       <div className="py-3 pr-3">
-        <div className="flex items-center gap-2.5 mb-1">
+        <div className="flex items-center gap-2.5 mb-2">
           <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/25 text-[10px] px-1.5 py-0 h-5 font-medium shrink-0">
             Ch {index + 1}
           </Badge>
@@ -274,23 +289,46 @@ function ChapterBlock({
               placeholder="Chapter title…"
             />
           )}
-          <div className="flex items-center gap-1.5 text-[10px] text-zinc-600 shrink-0">
-            <FileText className="w-3 h-3" />
-            {chapter.scenes.length}
-            <span className="mx-0.5 text-zinc-800">·</span>
-            {chapterWords.toLocaleString()}w
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Prominent word count */}
+            <div className="flex items-center gap-1 bg-zinc-800/50 rounded-md px-2 py-0.5">
+              <FileText className="w-3 h-3 text-zinc-500" />
+              <span className="text-[11px] font-medium text-zinc-300 tabular-nums">{chapterWords.toLocaleString()}</span>
+              <span className="text-[10px] text-zinc-600">words</span>
+            </div>
+            <div className="flex items-center gap-1 bg-zinc-800/50 rounded-md px-2 py-0.5">
+              <span className="text-[10px] text-zinc-500">{chapter.scenes.length} scenes</span>
+            </div>
           </div>
         </div>
+
+        {/* Progress bar */}
+        {totalScenes > 0 && (
+          <div className="ml-[52px] mb-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-zinc-600">Scene completion</span>
+              <span className="text-[10px] text-zinc-500 tabular-nums">{completedScenes}/{totalScenes} ({progressPercent}%)</span>
+            </div>
+            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Synopsis area - more prominent */}
         {savingSynopsis ? (
-          <div className="ml-[52px] text-xs text-zinc-500">Saving…</div>
+          <div className="ml-[52px] mb-2 text-xs text-zinc-500">Saving…</div>
         ) : (
-          <div className="ml-[52px]">
+          <div className={`ml-[52px] mb-2 rounded-lg ${chapter.synopsis ? 'bg-zinc-900/50 border border-zinc-800/50' : ''} px-3 py-2 transition-colors`}>
             <InlineEdit
               value={chapter.synopsis || ''}
               onSave={handleSaveSynopsis}
-              className="text-xs text-zinc-500 leading-relaxed"
+              className={`leading-relaxed ${chapter.synopsis ? 'text-xs text-zinc-400' : 'text-xs text-zinc-600 italic'}`}
               multiline
-              placeholder="Add a synopsis…"
+              placeholder="Add a synopsis for this chapter…"
             />
           </div>
         )}
@@ -475,8 +513,26 @@ export function OutlineView() {
             </div>
           )}
 
+          {/* Stats bar */}
+          {chapters.length > 0 && (
+            <div className="mb-6 grid grid-cols-3 gap-3">
+              <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-3 text-center">
+                <div className="text-lg font-semibold text-zinc-200 tabular-nums">{chapters.length}</div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">Chapters</div>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-3 text-center">
+                <div className="text-lg font-semibold text-zinc-200 tabular-nums">{totalScenes}</div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">Scenes</div>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-3 text-center">
+                <div className="text-lg font-semibold text-amber-400 tabular-nums">{totalWords.toLocaleString()}</div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">Words</div>
+              </div>
+            </div>
+          )}
+
           {/* Chapter list */}
-          <div className="space-y-6">
+          <div className="space-y-2">
             {chapters
               .slice()
               .sort((a, b) => a.sortOrder - b.sortOrder)
