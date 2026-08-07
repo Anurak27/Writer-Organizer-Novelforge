@@ -173,3 +173,29 @@ Stage Summary:
 - Type selector in form dialog includes custom categories with icons and color indicators
 - Custom entries display colored badge labels matching their category
 - MentionDropdown already compatible (uses `Record<string, ...>` for icon/color maps)
+---
+Task ID: 2
+Agent: Super Z (Main)
+Task: NovelCrafter-inspired improvements: Codex custom categories, AI fix, Ollama/Local LLM, UI enhancements
+
+Work Log:
+- Analyzed NovelCrafter via web search and documentation (video URL not directly parseable)
+- Explored full NovelForge codebase structure (14 API routes, 7 Prisma models, 45+ UI components)
+- Created /api/codex/categories route for custom codex category management (CRUD, stored in AppSetting)
+- Updated CodexEntry type from union to string for flexible custom types
+- Rewrote CodexPanel with: all 6 built-in types (added subplot+theme), custom categories with auto-colors/icons, Others tab, category manager dialog
+- Created /api/ai/test route for connection testing (Gemini, Ollama model listing, custom LLM)
+- Added Test Connection button to Settings with visual feedback (success/error, Ollama model list)
+- Added 'Other Local LLM (OpenAI-compatible)' provider for LM Studio, KoboldCpp, etc.
+- Fixed Settings page: added h-screen overflow-y-auto for scrolling, bottom padding
+- Enhanced ChapterSidebar: show chapter synopsis when expanded, scene content preview, scene notes for active scene
+- Enhanced OutlineView: scene notes fallback when no content, italic notes label
+- Added 'custom' provider to all 3 AI route registries (generate, chat, test) with no-auth handling
+
+Stage Summary:
+- Codex now supports custom categories (Style Guide, Festivals, Key Elements, etc.) like NovelCrafter
+- Ollama visible in provider list with auto-model-detection on test
+- Any OpenAI-compatible local LLM can connect via 'Other Local LLM' option
+- Settings page now scrolls properly
+- Outline and sidebar show more contextual information
+- Deployed to Vercel via git push
