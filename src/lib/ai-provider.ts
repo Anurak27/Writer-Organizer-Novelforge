@@ -81,6 +81,7 @@ export async function callAI(
         contents: [{ parts: [{ text: userMessage }] }],
         generationConfig: { maxOutputTokens: maxTokens, temperature },
       }),
+      signal: AbortSignal.timeout(120000),
     });
     const data = await res.json();
     if (data.error) {
@@ -106,6 +107,7 @@ export async function callAI(
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
+      signal: AbortSignal.timeout(120000),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
@@ -130,7 +132,12 @@ export async function callAI(
       max_tokens: maxTokens,
       temperature,
     }),
+    signal: AbortSignal.timeout(120000),
   });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`API request failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
   const data = await res.json();
   if (data.error) {
     const errMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
@@ -199,7 +206,12 @@ export async function callAIWithHistory(
         contents,
         generationConfig: { maxOutputTokens: maxTokens, temperature },
       }),
+      signal: AbortSignal.timeout(120000),
     });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Gemini API request failed (${res.status}): ${errText.slice(0, 300)}`);
+    }
     const data = await res.json();
     if (data.error) {
       const msg = data.error.message || data.error.status || JSON.stringify(data.error);
@@ -224,7 +236,12 @@ export async function callAIWithHistory(
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt, messages }),
+      signal: AbortSignal.timeout(120000),
     });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Anthropic API request failed (${res.status}): ${errText.slice(0, 300)}`);
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
     return data.content[0].text;
@@ -244,7 +261,12 @@ export async function callAIWithHistory(
     method: 'POST',
     headers,
     body: JSON.stringify({ model, messages: apiMessages, max_tokens: maxTokens, temperature }),
+    signal: AbortSignal.timeout(120000),
   });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`API request failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
   const data = await res.json();
   if (data.error) {
     const errMsg = data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
